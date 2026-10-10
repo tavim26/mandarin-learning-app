@@ -11,8 +11,10 @@ import com.chineselearning.userservice.service.UserService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 
@@ -37,8 +39,13 @@ public class UserController
 
     @PostMapping
     @Operation(summary = "Create new user", description = "Creates a new user with role STUDENT or TEACHER (admin only)")
-    public ResponseEntity<?> createUser(@RequestBody RegisterRequestDto request)
+    public ResponseEntity<?> createUser(@Valid @RequestBody RegisterRequestDto request, BindingResult bindingResult)
     {
+        if (bindingResult.hasErrors())
+        {
+            return ResponseEntity.badRequest().body(bindingResult.getAllErrors().get(0).getDefaultMessage());
+        }
+
         try {
             UserDto created = userService.createUser(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);

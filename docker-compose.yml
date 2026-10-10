@@ -2,8 +2,6 @@ version: "3.8"
 
 services:
 
-  # ===== BAZE DE DATE =====
-
   user-db:
     image: postgres:16-alpine
     environment:
@@ -101,9 +99,6 @@ services:
       retries: 5
 
 
-
-  # ===== MICROSERVICII JAVA =====
-
   user-service:
     container_name: user-service
     build:
@@ -115,6 +110,8 @@ services:
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     depends_on:
       user-db:
         condition: service_healthy
@@ -193,9 +190,6 @@ services:
       - app-network
 
 
-
-  # ===== TEXT ANALYSIS SERVICE — Python / FastAPI =====
-
   text-analysis-service:
     container_name: text-analysis-service
     build:
@@ -213,9 +207,6 @@ services:
     networks:
       - app-network
 
-
-
-  # ===== API GATEWAY =====
 
   api-gateway:
     container_name: api-gateway
@@ -243,10 +234,6 @@ services:
       - app-network
 
 
-
-
-  # ===== FRONTEND — Nginx =====
-
   frontend:
     container_name: frontend
     build:
@@ -261,8 +248,6 @@ services:
 
 
 
-# ===== VOLUMES =====
-
 volumes:
   user-db-data:
   content-db-data:
@@ -273,8 +258,6 @@ volumes:
   content-uploads:
   easyocr-models:
 
-
-# ===== NETWORKS =====
 
 networks:
   app-network:

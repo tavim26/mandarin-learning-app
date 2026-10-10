@@ -50,9 +50,9 @@ public class AuthService
             throw new IllegalArgumentException("Email already registered");
         }
 
-        if (!request.getRole().equals("STUDENT") && !request.getRole().equals("TEACHER") && !request.getRole().equals("ADMIN"))
+        if (!"STUDENT".equals(request.getRole()) && !"TEACHER".equals(request.getRole()))
         {
-            throw new IllegalArgumentException("Role must be STUDENT, TEACHER or ADMIN");
+            throw new IllegalArgumentException("Role must be STUDENT or TEACHER");
         }
 
         Credential credential = new Credential();

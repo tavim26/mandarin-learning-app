@@ -19,8 +19,8 @@ import type { Role } from '@/hooks/useAuth';
 const schema = z.object({
   fullName: z.string().min(2, 'Full name must be at least 2 characters.'),
   email: z.string().email('Invalid email address.'),
-  password: z.string().min(6, 'Password must be at least 6 characters.'),
-  role: z.enum(['STUDENT', 'TEACHER', 'ADMIN']),
+  password: z.string().min(8, 'Password must be at least 8 characters.'),
+  role: z.enum(['STUDENT', 'TEACHER']),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -121,7 +121,7 @@ const RegisterPage = () => {
               <Select
                 defaultValue="STUDENT"
                 onValueChange={(val) =>
-                  setValue('role', val as 'STUDENT' | 'TEACHER' | 'ADMIN')
+                  setValue('role', val as 'STUDENT' | 'TEACHER')
                 }
               >
                 <SelectTrigger className="input-branded">
@@ -130,7 +130,6 @@ const RegisterPage = () => {
                 <SelectContent>
                   <SelectItem value="STUDENT">Student</SelectItem>
                   <SelectItem value="TEACHER">Teacher</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
                 </SelectContent>
               </Select>
             </div>
