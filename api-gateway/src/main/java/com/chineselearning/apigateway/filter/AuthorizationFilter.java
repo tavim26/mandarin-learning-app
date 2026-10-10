@@ -12,22 +12,27 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
 @Order(2)
-public class AuthorizationFilter extends OncePerRequestFilter {
-
-    private static final List<String> PUBLIC_PATHS = List.of(
-            "/api/auth/register",
-            "/api/auth/login"
-    );
+public class AuthorizationFilter extends OncePerRequestFilter
+{
 
     private static final List<String> STUDENT_ONLY_PREFIXES = List.of(
             "/api/flashcards/",
             "/api/analysis/",
             "/api/chatbot/"
+    );
+
+    private static final String CONTENT_PREFIX = "/api/content/";
+
+    private static final Set<HttpMethod> READ_ONLY_METHODS = Set.of(
+            HttpMethod.GET,
+            HttpMethod.HEAD,
+            HttpMethod.OPTIONS
     );
 
     private static final List<AdminRule> ADMIN_ONLY_ROUTES = List.of(
@@ -59,18 +64,14 @@ public class AuthorizationFilter extends OncePerRequestFilter {
     );
 
     @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        return PUBLIC_PATHS.stream().anyMatch(path::startsWith);
+    protected boolean shouldNotFilter(HttpServletRequest request)
+    {
+        return PublicEndpoints.matches(request);
     }
 
     @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain
-    ) throws ServletException, IOException {
-
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException
+    {
         String role = request.getHeader("X-User-Role");
         String userIdHeader = request.getHeader("X-User-Id");
         String path = request.getRequestURI();
@@ -90,17 +91,23 @@ public class AuthorizationFilter extends OncePerRequestFilter {
 
         if ("TEACHER".equals(role))
         {
-            boolean blockedForTeacher = STUDENT_ONLY_PREFIXES.stream()
-                    .anyMatch(path::startsWith);
-            if (blockedForTeacher) {
+            boolean blockedForTeacher = STUDENT_ONLY_PREFIXES.stream().anyMatch(path::startsWith);
+            if (blockedForTeacher)
+            {
                 sendForbidden(response, "Access denied for TEACHER role");
                 return;
             }
         }
 
-        boolean isAdminOnly = ADMIN_ONLY_ROUTES.stream()
-                .anyMatch(rule -> rule.matches(method, path));
-        if (isAdminOnly) {
+        if ("STUDENT".equals(role) && path.startsWith(CONTENT_PREFIX) && !READ_ONLY_METHODS.contains(method))
+        {
+            sendForbidden(response, "Only teachers and admins can modify course content");
+            return;
+        }
+
+        boolean isAdminOnly = ADMIN_ONLY_ROUTES.stream().anyMatch(rule -> rule.matches(method, path));
+        if (isAdminOnly)
+        {
             sendForbidden(response, "Access allowed only for ADMINS");
             return;
         }
@@ -128,14 +135,17 @@ public class AuthorizationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void sendForbidden(HttpServletResponse response, String message) throws IOException {
+    private void sendForbidden(HttpServletResponse response, String message) throws IOException
+    {
         response.setStatus(HttpStatus.FORBIDDEN.value());
         response.setContentType("application/json");
         response.getWriter().write("{\"error\": \"" + message + "\"}");
     }
 
-    private record AdminRule(HttpMethod method, String pathPattern) {
-        boolean matches(HttpMethod requestMethod, String requestPath) {
+    private record AdminRule(HttpMethod method, String pathPattern)
+    {
+        boolean matches(HttpMethod requestMethod, String requestPath)
+        {
             return this.method.equals(requestMethod) && requestPath.matches(this.pathPattern);
         }
     }

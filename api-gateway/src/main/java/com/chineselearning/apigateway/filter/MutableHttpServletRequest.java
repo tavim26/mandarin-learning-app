@@ -5,11 +5,18 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 
 import java.util.*;
 
+/**
+ * Request wrapper that controls the identity headers (X-User-*) forwarded to downstream services.
+ * HTTP header names are case-insensitive, so every lookup here is case-insensitive as well:
+ * X-User-* headers sent by the client are hidden whatever their spelling, and only the values
+ * set by the gateway through {@link #putHeader} are forwarded.
+ */
 public class MutableHttpServletRequest extends HttpServletRequestWrapper
 {
 
-    private final Map<String, String> customHeaders = new HashMap<>();
-    private final Set<String> removedHeaders = new HashSet<>();
+    private static final String IDENTITY_HEADER_PREFIX = "x-user-";
+
+    private final Map<String, String> customHeaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 
     public MutableHttpServletRequest(HttpServletRequest request)
     {
@@ -21,32 +28,45 @@ public class MutableHttpServletRequest extends HttpServletRequestWrapper
         customHeaders.put(name, value);
     }
 
-
     @Override
     public String getHeader(String name)
     {
-        if (removedHeaders.contains(name.toLowerCase()))
-        {
-            return null;
-        }
         if (customHeaders.containsKey(name))
         {
             return customHeaders.get(name);
+        }
+        if (isIdentityHeader(name))
+        {
+            return null;
         }
         return super.getHeader(name);
     }
 
     @Override
+    public Enumeration<String> getHeaders(String name)
+    {
+        if (customHeaders.containsKey(name))
+        {
+            return Collections.enumeration(List.of(customHeaders.get(name)));
+        }
+        if (isIdentityHeader(name))
+        {
+            return Collections.emptyEnumeration();
+        }
+        return super.getHeaders(name);
+    }
+
+    @Override
     public Enumeration<String> getHeaderNames()
     {
-        Set<String> names = new HashSet<>(customHeaders.keySet());
-        Enumeration<String> original = super.getHeaderNames();
+        Set<String> names = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        names.addAll(customHeaders.keySet());
 
+        Enumeration<String> original = super.getHeaderNames();
         while (original.hasMoreElements())
         {
             String name = original.nextElement();
-
-            if (!removedHeaders.contains(name.toLowerCase()))
+            if (!isIdentityHeader(name))
             {
                 names.add(name);
             }
@@ -54,17 +74,8 @@ public class MutableHttpServletRequest extends HttpServletRequestWrapper
         return Collections.enumeration(names);
     }
 
-    @Override
-    public Enumeration<String> getHeaders(String name)
+    private static boolean isIdentityHeader(String name)
     {
-        if (removedHeaders.contains(name.toLowerCase()))
-        {
-            return Collections.enumeration(Collections.emptyList());
-        }
-        if (customHeaders.containsKey(name))
-        {
-            return Collections.enumeration(List.of(customHeaders.get(name)));
-        }
-        return super.getHeaders(name);
+        return name != null && name.toLowerCase(Locale.ROOT).startsWith(IDENTITY_HEADER_PREFIX);
     }
 }

@@ -1,6 +1,6 @@
-version: "3.8"
-
 services:
+
+  # ===== DATABASES =====
 
   user-db:
     image: postgres:16-alpine
@@ -98,13 +98,11 @@ services:
       timeout: 5s
       retries: 5
 
+  # ===== JAVA MICROSERVICES =====
 
   user-service:
-    container_name: user-service
     build:
       context: ./user-service
-    ports:
-      - "8082:8082"
     environment:
       DB_URL: jdbc:postgresql://user-db:5432/user_database
       DB_USERNAME: postgres
@@ -119,16 +117,13 @@ services:
       - app-network
 
   content-service:
-    container_name: content-service
     build:
       context: ./content-service
-    ports:
-      - "8081:8081"   
     environment:
       DB_URL: jdbc:postgresql://content-db:5432/content_database
       DB_USERNAME: postgres
       DB_PASSWORD: ${POSTGRES_PASSWORD}
-      STORAGE_BASE_URL: http://localhost:8081
+      STORAGE_BASE_URL: http://localhost:8080
     volumes:
       - content-uploads:/app/uploads
     depends_on:
@@ -138,11 +133,8 @@ services:
       - app-network
 
   progress-service:
-    container_name: progress-service
     build:
       context: ./progress-service
-    ports:
-      - "8083:8083"
     environment:
       DB_URL: jdbc:postgresql://progress-db:5432/progress_database
       DB_USERNAME: postgres
@@ -157,11 +149,8 @@ services:
       - app-network
 
   chatbot-service:
-    container_name: chatbot-service
     build:
       context: ./chatbot-service
-    ports:
-      - "8084:8084"
     environment:
       DB_URL: jdbc:postgresql://chatbot-db:5432/chatbot_database
       DB_USERNAME: postgres
@@ -174,11 +163,8 @@ services:
       - app-network
 
   flashcard-service:
-    container_name: flashcard-service
     build:
       context: ./flashcard-service
-    ports:
-      - "8086:8086"
     environment:
       DB_URL: jdbc:postgresql://flashcard-db:5432/flashcard_database
       DB_USERNAME: postgres
@@ -189,27 +175,25 @@ services:
     networks:
       - app-network
 
+  # ===== TEXT ANALYSIS SERVICE (Python / FastAPI) =====
 
   text-analysis-service:
-    container_name: text-analysis-service
     build:
       context: ./text-analysis-service
-    ports:
-      - "8085:8085"
     environment:
       DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@analysis-db:5432/text_analysis_database
       GOOGLE_TRANSLATE_API_KEY: ${GOOGLE_TRANSLATE_API_KEY}
     volumes:
-      - easyocr-models:/root/.EasyOCR   
+      - easyocr-models:/root/.EasyOCR
     depends_on:
       analysis-db:
         condition: service_healthy
     networks:
       - app-network
 
+  # ===== API GATEWAY =====
 
   api-gateway:
-    container_name: api-gateway
     build:
       context: ./api-gateway
     ports:
@@ -233,9 +217,9 @@ services:
     networks:
       - app-network
 
+  # ===== FRONTEND (Nginx) =====
 
   frontend:
-    container_name: frontend
     build:
       context: ./frontend
     ports:
@@ -245,8 +229,7 @@ services:
     networks:
       - app-network
 
-
-
+# ===== VOLUMES =====
 
 volumes:
   user-db-data:
@@ -258,6 +241,7 @@ volumes:
   content-uploads:
   easyocr-models:
 
+# ===== NETWORKS =====
 
 networks:
   app-network:
