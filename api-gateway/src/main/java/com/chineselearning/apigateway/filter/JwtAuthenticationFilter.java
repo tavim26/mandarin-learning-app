@@ -1,11 +1,17 @@
 package com.chineselearning.apigateway.filter;
 
+import com.chineselearning.apigateway.security.TokenStatus;
+import com.chineselearning.apigateway.security.TokenStatusClient;
+import com.chineselearning.apigateway.security.UserServiceUnavailableException;
 import com.chineselearning.apigateway.util.JwtUtil;
-
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,23 +19,28 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Optional;
 
 @Component
 @Order(1)
 public class JwtAuthenticationFilter extends OncePerRequestFilter
 {
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtUtil jwtUtil;
+    private final TokenStatusClient tokenStatusClient;
 
-    public JwtAuthenticationFilter(JwtUtil jwtUtil)
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, TokenStatusClient tokenStatusClient)
     {
         this.jwtUtil = jwtUtil;
+        this.tokenStatusClient = tokenStatusClient;
     }
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+            throws ServletException, IOException
     {
-
         // Authorization rules are matched against the raw URI, while downstream services decode it.
         if (request.getRequestURI().indexOf('%') >= 0)
         {
@@ -37,7 +48,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
             return;
         }
 
-        // Identity headers sent by the client are never trusted: the wrapper hides them,
+        // Identity headers sent by the client are never trusted: the wrapper hides them.
         MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
 
         if (PublicEndpoints.matches(request))
@@ -47,28 +58,52 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
         }
 
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
+        if (authHeader == null || !authHeader.startsWith(BEARER_PREFIX))
         {
-            sendError(response, HttpStatus.UNAUTHORIZED, "Invalid JWT Token");
+            sendError(response, HttpStatus.UNAUTHORIZED, "Missing bearer token");
             return;
         }
 
-        String token = authHeader.substring(7);
-
-        if (!jwtUtil.isTokenValid(token))
+        Claims claims;
+        try
         {
-            sendError(response, HttpStatus.UNAUTHORIZED, "Expired or corrupt JWT TOKEN");
+            // Parse and verify once; the old code verified the signature four times per request.
+            claims = jwtUtil.extractAllClaims(authHeader.substring(BEARER_PREFIX.length()));
+        }
+        catch (JwtException | IllegalArgumentException e)
+        {
+            log.debug("JWT rejected: {}", e.getMessage());
+            sendError(response, HttpStatus.UNAUTHORIZED, "Expired or invalid token");
             return;
         }
 
-        Long userId = jwtUtil.extractUserId(token);
-        String role = jwtUtil.extractRole(token);
-        String email = jwtUtil.extractEmail(token);
+        Long userId = claims.get("userId", Long.class);
+        String role = claims.get("role", String.class);
+        String email = claims.getSubject();
+        Integer tokenVersion = claims.get("ver", Integer.class);
 
-        if (userId == null || role == null || email == null)
+        if (userId == null || role == null || email == null || tokenVersion == null)
         {
-            sendError(response, HttpStatus.UNAUTHORIZED, "Incomplete JWT Token");
+            sendError(response, HttpStatus.UNAUTHORIZED, "Incomplete token");
+            return;
+        }
+
+        Optional<TokenStatus> status;
+        try
+        {
+            status = tokenStatusClient.getStatus(userId);
+        }
+        catch (UserServiceUnavailableException e)
+        {
+            // Fail closed: without user-service we cannot tell whether the token was revoked.
+            log.warn("Token status check failed for user {}", userId, e);
+            sendError(response, HttpStatus.SERVICE_UNAVAILABLE, "Authentication service unavailable");
+            return;
+        }
+
+        if (status.isEmpty() || !status.get().active() || status.get().tokenVersion() != tokenVersion)
+        {
+            sendError(response, HttpStatus.UNAUTHORIZED, "Token has been revoked");
             return;
         }
 
@@ -79,10 +114,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
         filterChain.doFilter(mutableRequest, response);
     }
 
-
-
-
-    private void sendError(HttpServletResponse response, HttpStatus status, String message) throws IOException
+    private static void sendError(HttpServletResponse response, HttpStatus status, String message) throws IOException
     {
         response.setStatus(status.value());
         response.setContentType("application/json");

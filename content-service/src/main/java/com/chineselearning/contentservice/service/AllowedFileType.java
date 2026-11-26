@@ -37,8 +37,7 @@ public enum AllowedFileType
     private final List<String> extensions;
     private final Predicate<byte[]> signature;
 
-    AllowedFileType(String materialType, String mediaType, boolean inline,
-                    List<String> extensions, Predicate<byte[]> signature)
+    AllowedFileType(String materialType, String mediaType, boolean inline, List<String> extensions, Predicate<byte[]> signature)
     {
         this.materialType = materialType;
         this.mediaType = mediaType;
@@ -54,6 +53,7 @@ public enum AllowedFileType
             return Optional.empty();
         }
         int dot = fileName.lastIndexOf('.');
+
         if (dot < 0 || dot == fileName.length() - 1)
         {
             return Optional.empty();

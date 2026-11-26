@@ -4,21 +4,31 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+/**
+ * Extends ResponseEntityExceptionHandler so framework exceptions (malformed JSON, missing or
+ * mistyped parameters, unknown routes) become ProblemDetail responses here, instead of being
+ * forwarded to /error, where the security chain would turn them into 403.
+ */
 @RestControllerAdvice
-public class GlobalExceptionHandler
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
 {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -60,28 +70,53 @@ public class GlobalExceptionHandler
         return problem(HttpStatus.UNAUTHORIZED, "Invalid credentials");
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleBodyValidation(MethodArgumentNotValidException e)
+    @ExceptionHandler(Exception.class)
+    public ProblemDetail handleUnexpected(Exception e)
+    {
+        log.error("Unhandled exception", e);
+        return problem(HttpStatus.INTERNAL_SERVER_ERROR, "Unexpected error");
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+                                                                  HttpHeaders headers,
+                                                                  HttpStatusCode status,
+                                                                  WebRequest request)
     {
         Map<String, String> errors = new LinkedHashMap<>();
-        e.getBindingResult().getFieldErrors()
+        ex.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
 
         String message = errors.values().stream().findFirst().orElse("Validation failed");
         ProblemDetail problem = problem(HttpStatus.BAD_REQUEST, message);
         problem.setProperty("errors", errors);
-        return problem;
+        return ResponseEntity.badRequest().headers(headers).body(problem);
     }
 
-    @ExceptionHandler(HandlerMethodValidationException.class)
-    public ProblemDetail handleParameterValidation(HandlerMethodValidationException e)
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+                                                                            HttpHeaders headers,
+                                                                            HttpStatusCode status,
+                                                                            WebRequest request)
     {
-        String message = e.getAllErrors().stream()
+        String message = ex.getAllErrors().stream()
                 .map(MessageSourceResolvable::getDefaultMessage)
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElse("Invalid request parameters");
-        return problem(HttpStatus.BAD_REQUEST, message);
+        return ResponseEntity.badRequest().headers(headers).body(problem(HttpStatus.BAD_REQUEST, message));
+    }
+
+    /** Adds the legacy "message" property to the ProblemDetails built by the base class. */
+    @Override
+    protected ResponseEntity<Object> createResponseEntity(Object body, HttpHeaders headers,
+                                                          HttpStatusCode statusCode, WebRequest request)
+    {
+        if (body instanceof ProblemDetail problem && problem.getDetail() != null)
+        {
+            problem.setProperty("message", problem.getDetail());
+        }
+        return super.createResponseEntity(body, headers, statusCode, request);
     }
 
     private static ProblemDetail problem(HttpStatus status, String message)

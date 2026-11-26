@@ -161,27 +161,19 @@ public class UserController
 
     @PutMapping("/{id}/password")
     @Operation(summary = "Change the password (self or admin)")
-    public ResponseEntity<Void> updatePassword(
-            @PathVariable Long id,
-            @RequestParam @NotBlank(message = "Current password is required")
-            @MaxUtf8Bytes(value = 72, message = "Current password is incorrect") String oldPassword,
-            @RequestParam @NotBlank(message = "New password is required")
-            @Size(min = 8, message = "Password must be at least 8 characters")
-            @MaxUtf8Bytes(value = 72, message = "Password must not exceed 72 bytes") String newPassword)
+    public ResponseEntity<Void> updatePassword(@PathVariable Long id,
+                                               @Valid @RequestBody ChangePasswordRequest request)
     {
-        userService.updatePassword(id, oldPassword, newPassword);
+        userService.updatePassword(id, request.currentPassword(), request.newPassword());
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{id}/password/reset")
     @Operation(summary = "Reset a user's password (admin only)")
-    public ResponseEntity<Void> adminResetPassword(
-            @PathVariable Long id,
-            @RequestParam @NotBlank(message = "New password is required")
-            @Size(min = 8, message = "Password must be at least 8 characters")
-            @MaxUtf8Bytes(value = 72, message = "Password must not exceed 72 bytes") String newPassword)
+    public ResponseEntity<Void> adminResetPassword(@PathVariable Long id,
+                                                   @Valid @RequestBody ResetPasswordRequest request)
     {
-        userService.adminUpdatePassword(id, newPassword);
+        userService.adminUpdatePassword(id, request.newPassword());
         return ResponseEntity.noContent().build();
     }
 

@@ -1,5 +1,9 @@
 package com.chineselearning.userservice.config;
 
+import jakarta.servlet.DispatcherType;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+
 import com.chineselearning.userservice.service.CustomUserDetailsService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -34,8 +38,13 @@ public class SecurityConfig
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Unauthenticated -> 401 (the default entry point answers 403).
+                .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(new GatewayHeadersAuthenticationFilter(), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+                        // Error dispatches carry the status already decided for the original request.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
@@ -62,7 +71,6 @@ public class SecurityConfig
 
         return http.build();
     }
-
     /** Allows the request when the {userId} in the path is the authenticated user, or the user is an admin. */
     private static AuthorizationManager<RequestAuthorizationContext> selfOrAdmin()
     {

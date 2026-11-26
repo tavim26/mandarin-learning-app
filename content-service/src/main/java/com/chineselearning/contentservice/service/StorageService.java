@@ -1,5 +1,7 @@
 package com.chineselearning.contentservice.service;
 
+import com.chineselearning.contentservice.entity.LessonMaterialEntity;
+import com.chineselearning.contentservice.exception.InvalidRequestException;
 import com.chineselearning.contentservice.exception.ResourceNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -14,6 +18,8 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -42,16 +48,16 @@ public class StorageService
     {
         if (file.isEmpty())
         {
-            throw new IllegalArgumentException("The file is empty");
+            throw new InvalidRequestException("The file is empty");
         }
         if (file.getSize() > MAX_FILE_SIZE_BYTES)
         {
-            throw new IllegalArgumentException("The file exceeds the maximum allowed size of 50MB");
+            throw new InvalidRequestException("The file exceeds the maximum allowed size of 50MB");
         }
 
         // The client-supplied Content-Type is ignored on purpose: it can be forged.
         AllowedFileType type = AllowedFileType.fromFileName(file.getOriginalFilename())
-                .orElseThrow(() -> new IllegalArgumentException("File extension not allowed"));
+                .orElseThrow(() -> new InvalidRequestException("File extension not allowed"));
 
         byte[] header;
         try (InputStream in = file.getInputStream())
@@ -60,7 +66,7 @@ public class StorageService
         }
         if (!type.matchesContent(header))
         {
-            throw new IllegalArgumentException("File content does not match its extension");
+            throw new InvalidRequestException("File content does not match its extension");
         }
 
         String fileName = UUID.randomUUID() + "." + type.canonicalExtension();
@@ -75,9 +81,13 @@ public class StorageService
         return new StoredFile(new FileSystemResource(resolve(fileName)), type);
     }
 
-    /** Returns the type of an existing file, or empty if it is missing or not an allowed type. */
+    /** Returns the type of an existing file, or empty if it is missing, unsafe or not an allowed type. */
     public Optional<AllowedFileType> storedFileType(String fileName)
     {
+        if (fileName == null || !SAFE_FILE_NAME.matcher(fileName).matches())
+        {
+            return Optional.empty();
+        }
         return AllowedFileType.fromFileName(fileName)
                 .filter(type -> Files.isRegularFile(resolve(fileName)));
     }
@@ -93,11 +103,47 @@ public class StorageService
         return SAFE_FILE_NAME.matcher(fileName).matches() ? Optional.of(fileName) : Optional.empty();
     }
 
-    public void delete(String fileName)
+    /**
+     * Deletes the uploaded files behind the given materials once the current transaction has
+     * committed, so a rollback never leaves a material pointing to a file that is already gone.
+     * Links are skipped: they may point to a file that belongs to another material.
+     */
+    public void deleteFilesAfterCommit(Collection<LessonMaterialEntity> materials)
     {
-        try {
+        List<String> fileNames = materials.stream()
+                .filter(material -> !material.isLink())
+                .map(material -> fileNameFromUrl(material.getUrl()))
+                .flatMap(Optional::stream)
+                .toList();
+
+        if (fileNames.isEmpty())
+        {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive())
+        {
+            fileNames.forEach(this::delete);
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization()
+        {
+            @Override
+            public void afterCommit()
+            {
+                fileNames.forEach(StorageService.this::delete);
+            }
+        });
+    }
+
+    private void delete(String fileName)
+    {
+        try
+        {
             Files.deleteIfExists(resolve(fileName));
-        } catch (IOException | IllegalArgumentException e) {
+        }
+        catch (IOException e)
+        {
             log.warn("Could not delete file {}", fileName, e);
         }
     }
