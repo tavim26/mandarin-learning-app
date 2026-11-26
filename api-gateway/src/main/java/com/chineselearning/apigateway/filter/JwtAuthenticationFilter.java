@@ -29,8 +29,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException
     {
+
+        // Authorization rules are matched against the raw URI, while downstream services decode it.
+        if (request.getRequestURI().indexOf('%') >= 0)
+        {
+            sendError(response, HttpStatus.BAD_REQUEST, "Encoded characters are not allowed in the request path");
+            return;
+        }
+
         // Identity headers sent by the client are never trusted: the wrapper hides them,
-        // and for authenticated requests they are set again from the validated token.
         MutableHttpServletRequest mutableRequest = new MutableHttpServletRequest(request);
 
         if (PublicEndpoints.matches(request))
@@ -43,7 +50,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
 
         if (authHeader == null || !authHeader.startsWith("Bearer "))
         {
-            sendUnauthorized(response, "Invalid JWT Token");
+            sendError(response, HttpStatus.UNAUTHORIZED, "Invalid JWT Token");
             return;
         }
 
@@ -51,7 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
 
         if (!jwtUtil.isTokenValid(token))
         {
-            sendUnauthorized(response, "Expired or corrupt JWT TOKEN");
+            sendError(response, HttpStatus.UNAUTHORIZED, "Expired or corrupt JWT TOKEN");
             return;
         }
 
@@ -61,7 +68,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
 
         if (userId == null || role == null || email == null)
         {
-            sendUnauthorized(response, "Incomplete JWT Token");
+            sendError(response, HttpStatus.UNAUTHORIZED, "Incomplete JWT Token");
             return;
         }
 
@@ -72,9 +79,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
         filterChain.doFilter(mutableRequest, response);
     }
 
-    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException
+
+
+
+    private void sendError(HttpServletResponse response, HttpStatus status, String message) throws IOException
     {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        response.setStatus(status.value());
         response.setContentType("application/json");
         response.getWriter().write("{\"error\": \"" + message + "\"}");
     }
