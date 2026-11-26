@@ -8,4 +8,6 @@ import java.util.List;
 public interface LessonMaterialJpaRepository extends JpaRepository<LessonMaterialEntity, Long> {
 
     List<LessonMaterialEntity> findByLessonId(Long lessonId);
+
+    boolean existsByUrl(String url);
 }

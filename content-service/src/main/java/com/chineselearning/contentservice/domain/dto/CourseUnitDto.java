@@ -1,17 +1,27 @@
 package com.chineselearning.contentservice.domain.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.*;
 
 public class CourseUnitDto {
 
     private Long id;
 
     @NotBlank(message = "Unit title is mandatory")
+    @Size(max = 255, message = "Unit title must not exceed 255 characters")
     private String title;
 
+    @Size(max = 5000, message = "Description must not exceed 5000 characters")
     private String description;
+
+    // Optional: a unit may have no HSK level
+    @Min(value = 1, message = "HSK level must be between 1 and 6")
+    @Max(value = 6, message = "HSK level must be between 1 and 6")
     private Integer hskLevel;
+
+    @NotNull(message = "Order index is mandatory")
+    @Min(value = 0, message = "Order index cannot be negative")
     private Integer orderIndex;
+
     private Long createdByTeacherId;
 
     public CourseUnitDto() {}

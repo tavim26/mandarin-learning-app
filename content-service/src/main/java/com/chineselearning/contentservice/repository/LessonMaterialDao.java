@@ -54,6 +54,12 @@ public class LessonMaterialDao implements ILessonMaterialDao
         return lessonMaterialJpaRepository.findById(id).map(this::toDomain);
     }
 
+    @Override
+    public boolean existsByUrl(String url)
+    {
+        return lessonMaterialJpaRepository.existsByUrl(url);
+    }
+
 
 
 

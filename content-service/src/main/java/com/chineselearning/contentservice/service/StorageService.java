@@ -1,123 +1,120 @@
 package com.chineselearning.contentservice.service;
 
+import com.chineselearning.contentservice.exception.ResourceNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Set;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class StorageService
 {
+    public static final String FILES_PATH = "/api/content/files/";
 
-    private static final Set<String> ALLOWED_TYPES = Set.of(
-            "image/jpeg",
-            "image/png",
-            "image/gif",
-            "application/pdf",
-            "application/msword",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "audio/mpeg",
-            "audio/wav",
-            "video/mp4"
-    );
-
+    private static final Logger log = LoggerFactory.getLogger(StorageService.class);
+    private static final Pattern SAFE_FILE_NAME = Pattern.compile("^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$");
     private static final long MAX_FILE_SIZE_BYTES = 50L * 1024 * 1024;
 
-    @Value("${storage.upload-dir}")
-    private String uploadDir;
+    private final Path uploadPath;
+    private final String baseUrl;
 
-    @Value("${storage.base-url}")
-    private String baseUrl;
+    public StorageService(@Value("${storage.upload-dir}") String uploadDir,
+                          @Value("${storage.base-url}") String baseUrl) throws IOException
+    {
+        this.uploadPath = Paths.get(uploadDir).toAbsolutePath().normalize();
+        this.baseUrl = baseUrl;
+        Files.createDirectories(uploadPath);
+    }
 
     public String upload(MultipartFile file) throws IOException
     {
-
-        if (file.getContentType() == null || !ALLOWED_TYPES.contains(file.getContentType()))
+        if (file.isEmpty())
         {
-            throw new IllegalArgumentException("File type not allowed: " + file.getContentType());
+            throw new IllegalArgumentException("The file is empty");
         }
-
         if (file.getSize() > MAX_FILE_SIZE_BYTES)
         {
-            throw new IllegalArgumentException("The file exceeds the maximum allowed size of : " + (file.getSize() / (1024 * 1024)) + "MB.");
+            throw new IllegalArgumentException("The file exceeds the maximum allowed size of 50MB");
         }
 
-        Path uploadPath = Paths.get(uploadDir).normalize();
-        if (!Files.exists(uploadPath))
+        // The client-supplied Content-Type is ignored on purpose: it can be forged.
+        AllowedFileType type = AllowedFileType.fromFileName(file.getOriginalFilename())
+                .orElseThrow(() -> new IllegalArgumentException("File extension not allowed"));
+
+        byte[] header;
+        try (InputStream in = file.getInputStream())
         {
-            Files.createDirectories(uploadPath);
+            header = in.readNBytes(AllowedFileType.HEADER_SIZE);
+        }
+        if (!type.matchesContent(header))
+        {
+            throw new IllegalArgumentException("File content does not match its extension");
         }
 
-        String originalName = file.getOriginalFilename();
-        String safeName = (originalName != null)
-                ? Paths.get(originalName).getFileName().toString()
-                .replaceAll("[^a-zA-Z0-9._-]", "_")
-                : "file";
-
-        String fileName = UUID.randomUUID() + "_" + safeName;
-        Path filePath = uploadPath.resolve(fileName).normalize();
-
-        if (!filePath.startsWith(uploadPath)) {
-            throw new SecurityException("Invalid file name.");
-        }
-
-        Files.write(filePath, file.getBytes());
-        return baseUrl + "/api/content/files/" + fileName;
+        String fileName = UUID.randomUUID() + "." + type.canonicalExtension();
+        file.transferTo(resolve(fileName));
+        return baseUrl + FILES_PATH + fileName;
     }
 
-
-
-    public void delete(String fileUrl)
+    public StoredFile load(String fileName)
     {
-        String fileName = fileUrl.substring(fileUrl.lastIndexOf("/") + 1);
+        AllowedFileType type = storedFileType(fileName)
+                .orElseThrow(() -> new ResourceNotFoundException("File not found"));
+        return new StoredFile(new FileSystemResource(resolve(fileName)), type);
+    }
 
-        Path uploadPath = Paths.get(uploadDir).normalize();
-        Path filePath = uploadPath.resolve(fileName).normalize();
+    /** Returns the type of an existing file, or empty if it is missing or not an allowed type. */
+    public Optional<AllowedFileType> storedFileType(String fileName)
+    {
+        return AllowedFileType.fromFileName(fileName)
+                .filter(type -> Files.isRegularFile(resolve(fileName)));
+    }
 
-        if (!filePath.startsWith(uploadPath))
+    public Optional<String> fileNameFromUrl(String url)
+    {
+        String prefix = baseUrl + FILES_PATH;
+        if (url == null || !url.startsWith(prefix))
         {
-            return;
+            return Optional.empty();
         }
+        String fileName = url.substring(prefix.length());
+        return SAFE_FILE_NAME.matcher(fileName).matches() ? Optional.of(fileName) : Optional.empty();
+    }
 
+    public void delete(String fileName)
+    {
         try {
-            Files.deleteIfExists(filePath);
-        } catch (IOException e) {
-            // file does not exist on disk
+            Files.deleteIfExists(resolve(fileName));
+        } catch (IOException | IllegalArgumentException e) {
+            log.warn("Could not delete file {}", fileName, e);
         }
     }
 
-
-    public byte[] loadFile(String fileName) throws IOException
+    private Path resolve(String fileName)
     {
-        Path uploadPath = Paths.get(uploadDir).normalize();
-        Path filePath = uploadPath.resolve(fileName).normalize();
-
-        if (!filePath.startsWith(uploadPath))
+        if (fileName == null || !SAFE_FILE_NAME.matcher(fileName).matches())
         {
-            throw new SecurityException("Access not allowed to this file.");
+            throw new IllegalArgumentException("Invalid file name");
         }
-
-        return Files.readAllBytes(filePath);
+        Path path = uploadPath.resolve(fileName).normalize();
+        if (!uploadPath.equals(path.getParent()))
+        {
+            throw new IllegalArgumentException("Invalid file name");
+        }
+        return path;
     }
 
-
-    public String getContentType(String fileName) throws IOException
-    {
-        Path uploadPath = Paths.get(uploadDir).normalize();
-        Path filePath = uploadPath.resolve(fileName).normalize();
-
-        if (!filePath.startsWith(uploadPath))
-        {
-            throw new SecurityException("Access not allowed to this file.");
-        }
-
-        String contentType = Files.probeContentType(filePath);
-        return contentType != null ? contentType : "application/octet-stream";
-    }
+    public record StoredFile(Resource resource, AllowedFileType type) {}
 }

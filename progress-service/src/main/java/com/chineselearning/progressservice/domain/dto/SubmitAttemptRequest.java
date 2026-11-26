@@ -1,6 +1,8 @@
 package com.chineselearning.progressservice.domain.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.util.Map;
 
@@ -8,9 +10,12 @@ public class SubmitAttemptRequest
 {
 
     @NotNull(message = "exerciseId is mandatory")
+    @Positive(message = "exerciseId must be positive")
     private Long exerciseId;
 
+    // The number of top-level keys is small for every exercise type
     @NotNull(message = "submittedAnswer is mandatory")
+    @Size(max = 50, message = "submittedAnswer has too many entries")
     private Map<String, Object> submittedAnswer;
 
     public SubmitAttemptRequest() {}

@@ -1,25 +1,29 @@
 package com.chineselearning.contentservice.controller;
 
 import com.chineselearning.contentservice.domain.dto.*;
+import com.chineselearning.contentservice.security.CurrentUser;
+import com.chineselearning.contentservice.service.AllowedFileType;
 import com.chineselearning.contentservice.service.ContentService;
 import com.chineselearning.contentservice.service.StorageService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.List;
-
-// http://localhost:8081/swagger-ui/index.html
 
 @RestController
 @RequestMapping("/api/content")
 @Tag(name = "Content Service API")
 public class ContentController
 {
+    private static final String FILE_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
     private final ContentService contentService;
     private final StorageService storageService;
@@ -30,276 +34,219 @@ public class ContentController
         this.storageService = storageService;
     }
 
+    // ===== Units =====
 
-
-    @Operation(summary = "Get all course units", description = "Returns all course units, optionally filtered by HSK level.")
+    @Operation(summary = "Get all course units, optionally filtered by HSK level")
     @GetMapping("/units")
-    public ResponseEntity<List<CourseUnitDto>> getAllUnits(@RequestParam(required = false) Integer hskLevel)
+    public List<CourseUnitDto> getAllUnits(@RequestParam(required = false) Integer hskLevel)
     {
-        return ResponseEntity.ok(contentService.getAllCourseUnits(hskLevel));
+        return contentService.getAllCourseUnits(hskLevel);
     }
 
-    @Operation(summary = "Get a course unit", description = "Returns the details of a course unit by its ID.")
+    @Operation(summary = "Get a course unit")
     @GetMapping("/units/{id}")
-    public ResponseEntity<CourseUnitDto> getUnit(@PathVariable Long id)
+    public CourseUnitDto getUnit(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getCourseUnit(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getCourseUnit(id);
     }
 
-    @Operation(summary = "Get a course unit with lessons", description = "Returns the unit along with all its associated lessons.")
+    @Operation(summary = "Get a course unit with its lessons")
     @GetMapping("/units/{id}/full")
-    public ResponseEntity<CourseUnitFullDto> getUnitFull(@PathVariable Long id)
+    public CourseUnitFullDto getUnitFull(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getCourseUnitFull(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getCourseUnitFull(id);
     }
 
-    @Operation(summary = "Create a course unit", description = "Adds a new module to the course structure.")
+    @Operation(summary = "Create a course unit")
     @PostMapping("/units")
-    public ResponseEntity<CourseUnitDto> createUnit(
-            @Valid @RequestBody CourseUnitDto dto, @RequestHeader("X-User-Id") Long teacherId)
+    public ResponseEntity<CourseUnitDto> createUnit(@Valid @RequestBody CourseUnitDto dto,
+                                                    @Parameter(hidden = true) CurrentUser user)
     {
-        return ResponseEntity.status(201).body(contentService.createCourseUnit(dto, teacherId));
+        return ResponseEntity.status(HttpStatus.CREATED).body(contentService.createCourseUnit(dto, user));
     }
 
-    @Operation(summary = "Update a course unit", description = "Updates the details of an existing course unit.")
+    @Operation(summary = "Update a course unit (owner or admin)")
     @PutMapping("/units/{id}")
-    public ResponseEntity<CourseUnitDto> updateUnit(@PathVariable Long id, @Valid @RequestBody CourseUnitDto dto)
+    public CourseUnitDto updateUnit(@PathVariable Long id, @Valid @RequestBody CourseUnitDto dto,
+                                    @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.ok(contentService.updateCourseUnit(id, dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.updateCourseUnit(id, dto, user);
     }
 
-    @Operation(summary = "Delete a course unit", description = "Deletes the unit and all its associated lessons.")
+    @Operation(summary = "Delete a course unit and its lessons (owner or admin)")
     @DeleteMapping("/units/{id}")
-    public ResponseEntity<Void> deleteUnit(@PathVariable Long id)
+    public ResponseEntity<Void> deleteUnit(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            contentService.deleteCourseUnit(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        contentService.deleteCourseUnit(id, user);
+        return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Get units by teacher", description = "Returns all course units created by a specific teacher.")
+    @Operation(summary = "Get units created by a teacher")
     @GetMapping("/units/teacher/{teacherId}")
-    public ResponseEntity<List<CourseUnitDto>> getUnitsByTeacher(@PathVariable Long teacherId)
+    public List<CourseUnitDto> getUnitsByTeacher(@PathVariable Long teacherId)
     {
-        return ResponseEntity.ok(contentService.getCourseUnitsByTeacher(teacherId));
+        return contentService.getCourseUnitsByTeacher(teacherId);
     }
 
+    // ===== Lessons =====
 
-
-    @Operation(summary = "Get lessons by unit", description = "Returns all lessons belonging to a specific unit, ordered by index.")
+    @Operation(summary = "Get lessons of a unit")
     @GetMapping("/units/{unitId}/lessons")
-    public ResponseEntity<List<LessonDto>> getLessonsByUnit(@PathVariable Long unitId)
+    public List<LessonDto> getLessonsByUnit(@PathVariable Long unitId)
     {
-        return ResponseEntity.ok(contentService.getLessonsByUnitId(unitId));
+        return contentService.getLessonsByUnitId(unitId);
     }
 
-    @Operation(summary = "Get a lesson", description = "Returns the full details of a lesson, including its exercises.")
+    @Operation(summary = "Get a lesson with its exercises")
     @GetMapping("/lessons/{id}")
-    public ResponseEntity<LessonDto> getLesson(@PathVariable Long id)
+    public LessonDto getLesson(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getLesson(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getLesson(id);
     }
 
-    @Operation(summary = "Create a lesson", description = "Adds a new lesson to an existing unit.")
+    @Operation(summary = "Create a lesson in an owned unit")
     @PostMapping("/lessons")
-    public ResponseEntity<LessonDto> createLesson(@Valid @RequestBody LessonDto dto)
+    public ResponseEntity<LessonDto> createLesson(@Valid @RequestBody LessonDto dto,
+                                                  @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.status(201).body(contentService.createLesson(dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(contentService.createLesson(dto, user));
     }
 
-    @Operation(summary = "Update a lesson", description = "Updates the content of an existing lesson.")
+    @Operation(summary = "Update a lesson (owner or admin)")
     @PutMapping("/lessons/{id}")
-    public ResponseEntity<LessonDto> updateLesson(@PathVariable Long id, @Valid @RequestBody LessonDto dto)
+    public LessonDto updateLesson(@PathVariable Long id, @Valid @RequestBody LessonDto dto,
+                                  @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.ok(contentService.updateLesson(id, dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.updateLesson(id, dto, user);
     }
 
-    @Operation(summary = "Delete a lesson", description = "Deletes the lesson and all its associated exercises and materials.")
+    @Operation(summary = "Delete a lesson (owner or admin)")
     @DeleteMapping("/lessons/{id}")
-    public ResponseEntity<Void> deleteLesson(@PathVariable Long id)
+    public ResponseEntity<Void> deleteLesson(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            contentService.deleteLesson(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        contentService.deleteLesson(id, user);
+        return ResponseEntity.noContent().build();
     }
 
+    // ===== Materials and files =====
 
-
-    @Operation(summary = "Get lesson materials", description = "Returns all resources attached to a specific lesson.")
+    @Operation(summary = "Get materials of a lesson")
     @GetMapping("/lessons/{lessonId}/materials")
-    public ResponseEntity<List<LessonMaterialDto>> getMaterials(@PathVariable Long lessonId)
+    public List<LessonMaterialDto> getMaterials(@PathVariable Long lessonId)
     {
-        return ResponseEntity.ok(contentService.getMaterialsForLesson(lessonId));
+        return contentService.getMaterialsForLesson(lessonId);
     }
 
-    @Operation(summary = "Add a material", description = "Attaches a new resource to a lesson.")
+    @Operation(summary = "Attach a material to an owned lesson")
     @PostMapping("/materials")
-    public ResponseEntity<LessonMaterialDto> addMaterial(@Valid @RequestBody LessonMaterialDto dto)
+    public ResponseEntity<LessonMaterialDto> addMaterial(@Valid @RequestBody LessonMaterialDto dto,
+                                                         @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.status(201).body(contentService.addLessonMaterial(dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(contentService.addLessonMaterial(dto, user));
     }
 
-    @Operation(summary = "Delete a material", description = "Deletes the material record and its associated file from disk, if any.")
+    @Operation(summary = "Delete a material and its file (owner or admin)")
     @DeleteMapping("/materials/{id}")
-    public ResponseEntity<Void> deleteMaterial(@PathVariable Long id)
+    public ResponseEntity<Void> deleteMaterial(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            contentService.deleteLessonMaterial(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        contentService.deleteLessonMaterial(id, user);
+        return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "Upload a file", description = "Uploads a file to the server and returns its access URL. Accepted types: JPEG, PNG, GIF, PDF, DOC, DOCX, MP3, WAV, MP4. Maximum size: 50MB.")
+    @Operation(summary = "Upload a file. Allowed: JPG, PNG, GIF, PDF, DOC, DOCX, MP3, WAV, MP4 (max 50MB)")
     @PostMapping("/materials/upload")
-    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file)
+    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file,
+                                             @Parameter(hidden = true) CurrentUser user) throws IOException
     {
-        try {
-            String url = storageService.upload(file);
-            return ResponseEntity.status(201).body(url);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (IOException e) {
-            return ResponseEntity.status(500).build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(contentService.uploadMaterialFile(file, user));
     }
 
-    @Operation(summary = "Serve a file", description = "Returns the binary content of a previously uploaded file, identified by its name.")
+    @Operation(summary = "Serve an uploaded file")
     @GetMapping("/files/{fileName}")
-    public ResponseEntity<byte[]> serveFile(@PathVariable String fileName)
+    public ResponseEntity<Resource> serveFile(@PathVariable String fileName)
     {
-        try {
-            byte[] fileBytes = storageService.loadFile(fileName);
-            String contentType = storageService.getContentType(fileName);
-            return ResponseEntity.ok()
-                    .header("Content-Type", contentType)
-                    .body(fileBytes);
-        } catch (IOException e) {
-            return ResponseEntity.notFound().build();
+        StorageService.StoredFile file = storageService.load(fileName);
+        AllowedFileType type = file.type();
+
+        ContentDisposition disposition = (type.isInline() ? ContentDisposition.inline() : ContentDisposition.attachment())
+                .filename(fileName)
+                .build();
+
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(type.mediaType()))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .cacheControl(CacheControl.maxAge(Duration.ofDays(7)));
+
+        // Browsers refuse to render PDFs inside a sandboxed document.
+        if (type != AllowedFileType.PDF)
+        {
+            response.header("Content-Security-Policy", FILE_CSP);
         }
+
+        return response.body(file.resource());
     }
 
+    // ===== Exercises =====
 
-
-    @Operation(summary = "Get an exercise", description = "Returns the details of an exercise by its ID.")
+    @Operation(summary = "Get an exercise")
     @GetMapping("/exercises/{id}")
-    public ResponseEntity<ExerciseDto> getExercise(@PathVariable Long id)
+    public ExerciseDto getExercise(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getExercise(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getExercise(id);
     }
 
-    @Operation(summary = "Get exercises by lesson", description = "Returns all exercises associated with a specific lesson.")
+    @Operation(summary = "Get exercises of a lesson")
     @GetMapping("/lessons/{lessonId}/exercises")
-    public ResponseEntity<List<ExerciseDto>> getExercises(@PathVariable Long lessonId)
+    public List<ExerciseDto> getExercises(@PathVariable Long lessonId)
     {
-        return ResponseEntity.ok(contentService.getExercisesForLesson(lessonId));
+        return contentService.getExercisesForLesson(lessonId);
     }
 
-    @Operation(summary = "Add an exercise", description = "Creates a new exercise and attaches it to a lesson.")
+    @Operation(summary = "Add an exercise to an owned lesson")
     @PostMapping("/exercises")
-    public ResponseEntity<ExerciseDto> addExercise(@Valid @RequestBody ExerciseDto dto)
+    public ResponseEntity<ExerciseDto> addExercise(@Valid @RequestBody ExerciseDto dto,
+                                                   @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.status(201).body(contentService.addExercise(dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(contentService.addExercise(dto, user));
     }
 
-    @Operation(summary = "Update an exercise", description = "Updates the content of an existing exercise.")
+    @Operation(summary = "Update an exercise (owner or admin)")
     @PutMapping("/exercises/{id}")
-    public ResponseEntity<ExerciseDto> updateExercise(@PathVariable Long id, @Valid @RequestBody ExerciseDto dto)
+    public ExerciseDto updateExercise(@PathVariable Long id, @Valid @RequestBody ExerciseDto dto,
+                                      @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            return ResponseEntity.ok(contentService.updateExercise(id, dto));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.updateExercise(id, dto, user);
     }
 
-    @Operation(summary = "Delete an exercise", description = "Deletes an exercise from its associated lesson.")
+    @Operation(summary = "Delete an exercise (owner or admin)")
     @DeleteMapping("/exercises/{id}")
-    public ResponseEntity<Void> deleteExercise(@PathVariable Long id)
+    public ResponseEntity<Void> deleteExercise(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        try {
-            contentService.deleteExercise(id);
-            return ResponseEntity.noContent().build();
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        contentService.deleteExercise(id, user);
+        return ResponseEntity.noContent().build();
     }
 
+    // ===== Statistics =====
 
-
-    @Operation(summary = "Get unit XP stats", description = "Returns the total XP earned across all lessons in a unit.")
+    @Operation(summary = "Get total XP of a unit")
     @GetMapping("/units/{id}/stats/xp")
-    public ResponseEntity<UnitXpStatsDto> getUnitXpStats(@PathVariable Long id)
+    public UnitXpStatsDto getUnitXpStats(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getUnitXpStats(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getUnitXpStats(id);
     }
 
-    @Operation(summary = "Get unit lesson count", description = "Returns the total number of lessons in a unit.")
+    @Operation(summary = "Get the number of lessons in a unit")
     @GetMapping("/units/{id}/stats/lessons")
-    public ResponseEntity<UnitLessonCountDto> getUnitLessonCount(@PathVariable Long id)
+    public UnitLessonCountDto getUnitLessonCount(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getUnitLessonCount(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getUnitLessonCount(id);
     }
 
-    @Operation(summary = "Get exercise type distribution", description = "Returns the count of exercises grouped by type, useful for rendering a pie chart.")
+    @Operation(summary = "Get exercise type distribution of a lesson")
     @GetMapping("/lessons/{id}/stats/exercise-types")
-    public ResponseEntity<LessonExerciseTypesDto> getLessonExerciseTypes(@PathVariable Long id)
+    public LessonExerciseTypesDto getLessonExerciseTypes(@PathVariable Long id)
     {
-        try {
-            return ResponseEntity.ok(contentService.getLessonExerciseTypes(id));
-        } catch (RuntimeException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return contentService.getLessonExerciseTypes(id);
     }
 }

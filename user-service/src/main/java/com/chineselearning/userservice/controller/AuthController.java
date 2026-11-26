@@ -1,9 +1,6 @@
 package com.chineselearning.userservice.controller;
 
-import com.chineselearning.userservice.domain.dto.AuthRequestDto;
-import com.chineselearning.userservice.domain.dto.AuthResponseDto;
-import com.chineselearning.userservice.domain.dto.RegisterRequestDto;
-import com.chineselearning.userservice.domain.dto.RegisterResponseDto;
+import com.chineselearning.userservice.domain.dto.*;
 import com.chineselearning.userservice.service.AuthService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,8 +28,8 @@ public class AuthController
     }
 
     @PostMapping("/register")
-    @Operation(summary = "Register new user", description = "Creates a new STUDENT or TEACHER account and returns user info")
-    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequestDto request, BindingResult bindingResult)
+    @Operation(summary = "Register new student", description = "Creates a new STUDENT account")
+    public ResponseEntity<?> register(@Valid @RequestBody StudentRegisterRequestDto request, BindingResult bindingResult)
     {
         if (bindingResult.hasErrors())
         {

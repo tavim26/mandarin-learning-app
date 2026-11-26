@@ -17,7 +17,6 @@ export interface RegisterRequestDto {
   email: string;
   password: string;
   fullName: string;
-  role: Role;
 }
 
 export interface AuthResponseDto {

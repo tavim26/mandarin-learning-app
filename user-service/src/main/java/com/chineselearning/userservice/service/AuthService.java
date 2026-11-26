@@ -6,11 +6,7 @@ import com.chineselearning.userservice.domain.Teacher;
 import com.chineselearning.userservice.domain.User;
 
 import com.chineselearning.userservice.domain.dao.ICredentialDao;
-import com.chineselearning.userservice.domain.dto.AuthRequestDto;
-import com.chineselearning.userservice.domain.dto.AuthResponseDto;
-import com.chineselearning.userservice.domain.dto.RegisterRequestDto;
-import com.chineselearning.userservice.domain.dto.RegisterResponseDto;
-
+import com.chineselearning.userservice.domain.dto.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -43,22 +39,17 @@ public class AuthService
 
 
     @Transactional
-    public RegisterResponseDto register(RegisterRequestDto request)
+    public RegisterResponseDto register(StudentRegisterRequestDto request)
     {
         if (credentialDao.existsByEmail(request.getEmail()))
         {
             throw new IllegalArgumentException("Email already registered");
         }
 
-        if (!"STUDENT".equals(request.getRole()) && !"TEACHER".equals(request.getRole()))
-        {
-            throw new IllegalArgumentException("Role must be STUDENT or TEACHER");
-        }
-
         Credential credential = new Credential();
         credential.setEmail(request.getEmail());
         credential.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        credential.setRole(request.getRole());
+        credential.setRole("STUDENT");
         credential.setCreatedAt(LocalDateTime.now());
 
         User user = new User();
@@ -66,28 +57,13 @@ public class AuthService
         user.setCredential(credential);
         credential.setUser(user);
 
-        if (request.getRole().equals("STUDENT"))
-        {
-            Student student = new Student();
-            student.setNickname(null);
-            student.setUser(user);
-            user.setStudent(student);
-        }
-        else if (request.getRole().equals("TEACHER"))
-        {
-            Teacher teacher = new Teacher();
-            teacher.setTitle("");
-            teacher.setUser(user);
-            user.setTeacher(teacher);
-        }
+        Student student = new Student();
+        student.setUser(user);
+        user.setStudent(student);
 
-        Credential savedCredential = credentialDao.save(credential);
+        Credential saved = credentialDao.save(credential);
 
-        return new RegisterResponseDto(
-                savedCredential.getId(),
-                savedCredential.getRole(),
-                savedCredential.getUser().getFullName()
-        );
+        return new RegisterResponseDto(saved.getId(), saved.getRole(), saved.getUser().getFullName());
     }
 
 

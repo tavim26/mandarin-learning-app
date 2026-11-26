@@ -1,7 +1,6 @@
 package com.chineselearning.contentservice.domain.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 
 import java.util.Map;
 
@@ -12,12 +11,20 @@ public class ExerciseDto {
     private Long lessonId;
 
     @NotBlank(message = "Exercise type is mandatory")
+    @Pattern(regexp = "MULTIPLE_CHOICE|TRANSLATION|FILL_BLANK|MATCHING|ORDERING",
+            message = "Unknown exercise type")
     private String type;
 
     @NotBlank(message = "Exercise prompt is mandatory")
+    @Size(max = 2000, message = "Prompt must not exceed 2000 characters")
     private String prompt;
 
+    // Optional, 1-5 in the UI
+    @Min(value = 1, message = "Difficulty must be between 1 and 5")
+    @Max(value = 5, message = "Difficulty must be between 1 and 5")
     private Integer difficulty;
+
+    @NotNull(message = "Exercise content is mandatory")
     private Map<String, Object> contentData;
 
     public ExerciseDto() {}

@@ -2,6 +2,7 @@ package com.chineselearning.contentservice.domain.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public class LessonMaterialDto {
 
@@ -11,11 +12,14 @@ public class LessonMaterialDto {
     private Long lessonId;
 
     @NotBlank(message = "Material title is mandatory")
+    @Size(max = 255, message = "Material title must not exceed 255 characters")
     private String title;
 
     @NotBlank(message = "Material type is mandatory")
+    @Size(max = 20, message = "Material type is too long")
     private String type;
 
+    @Size(max = 1000, message = "Material URL must not exceed 1000 characters")
     private String url;
 
     public LessonMaterialDto() {}
