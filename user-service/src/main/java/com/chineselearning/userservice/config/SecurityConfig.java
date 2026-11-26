@@ -1,15 +1,15 @@
 package com.chineselearning.userservice.config;
 
 import com.chineselearning.userservice.service.CustomUserDetailsService;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
+import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.authorization.AuthorizationManager;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -25,13 +25,6 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 @EnableWebSecurity
 public class SecurityConfig
 {
-    private final CustomUserDetailsService userDetailsService;
-
-    public SecurityConfig(CustomUserDetailsService userDetailsService)
-    {
-        this.userDetailsService = userDetailsService;
-    }
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception
     {
@@ -39,17 +32,19 @@ public class SecurityConfig
                 .csrf(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
+                .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(new GatewayHeadersAuthenticationFilter(), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
-                        // public
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-                        // any authenticated user (must come before the {userId} patterns below)
+                        // Not routed by the gateway: reachable only from inside the Docker network.
+                        .requestMatchers(HttpMethod.GET, "/internal/users/*/token-status").permitAll()
+
+                        // Any authenticated user (must come before the {userId} patterns below)
                         .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/students/search").authenticated()
 
-                        // the user's own data
                         .requestMatchers(HttpMethod.GET, "/api/users/students/{userId}", "/api/users/teachers/{userId}")
                         .access(selfOrAdmin())
                         .requestMatchers(HttpMethod.PUT,
@@ -59,7 +54,7 @@ public class SecurityConfig
                                 "/api/users/{userId}/password")
                         .access(selfOrAdmin())
 
-                        // everything else under /api/users: list, search, create, rename, ban, reset, delete
+                        // Everything else under /api/users: list, search, create, rename, ban, reset, delete
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
 
                         .anyRequest().denyAll()
@@ -97,10 +92,11 @@ public class SecurityConfig
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception
+    public AuthenticationManager authenticationManager(CustomUserDetailsService userDetailsService,
+                                                       PasswordEncoder passwordEncoder)
     {
-        AuthenticationManagerBuilder authBuilder = http.getSharedObject(AuthenticationManagerBuilder.class);
-        authBuilder.userDetailsService(userDetailsService).passwordEncoder(passwordEncoder());
-        return authBuilder.build();
+        DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder);
+        return new ProviderManager(provider);
     }
 }

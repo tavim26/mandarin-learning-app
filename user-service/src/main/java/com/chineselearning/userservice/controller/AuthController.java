@@ -1,25 +1,22 @@
 package com.chineselearning.userservice.controller;
 
-import com.chineselearning.userservice.domain.dto.*;
+import com.chineselearning.userservice.dto.AuthResponseDto;
+import com.chineselearning.userservice.dto.LoginRequestDto;
+import com.chineselearning.userservice.dto.RegisterResponseDto;
+import com.chineselearning.userservice.dto.StudentRegisterRequestDto;
 import com.chineselearning.userservice.service.AuthService;
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
 
 @RestController
 @RequestMapping("/api/auth")
-@Tag(name = "Authentication", description = "Endpoints for user registration and login")
+@Tag(name = "Authentication")
 public class AuthController
 {
-
     private final AuthService authService;
 
     public AuthController(AuthService authService)
@@ -28,38 +25,16 @@ public class AuthController
     }
 
     @PostMapping("/register")
-    @Operation(summary = "Register new student", description = "Creates a new STUDENT account")
-    public ResponseEntity<?> register(@Valid @RequestBody StudentRegisterRequestDto request, BindingResult bindingResult)
+    @Operation(summary = "Register a new student account")
+    public ResponseEntity<RegisterResponseDto> register(@Valid @RequestBody StudentRegisterRequestDto request)
     {
-        if (bindingResult.hasErrors())
-        {
-            return ResponseEntity.badRequest().body(errorBody(bindingResult.getAllErrors().get(0).getDefaultMessage()));
-        }
-
-        try {
-            RegisterResponseDto response = authService.register(request);
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(errorBody(e.getMessage()));
-        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(request));
     }
 
     @PostMapping("/login")
-    @Operation(summary = "Login user", description = "Authenticates user credentials and returns JWT token")
-    public ResponseEntity<?> login(@RequestBody AuthRequestDto request)
+    @Operation(summary = "Authenticate and receive a JWT")
+    public AuthResponseDto login(@Valid @RequestBody LoginRequestDto request)
     {
-        try {
-            AuthResponseDto response = authService.login(request);
-            return ResponseEntity.ok(response);
-        } catch (DisabledException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("Account is banned"));
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(errorBody("Invalid credentials"));
-        }
-    }
-
-    private static Map<String, String> errorBody(String message)
-    {
-        return Map.of("message", message);
+        return authService.login(request);
     }
 }

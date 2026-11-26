@@ -1,214 +1,196 @@
 package com.chineselearning.userservice.service;
 
-import com.chineselearning.userservice.domain.Credential;
-import com.chineselearning.userservice.domain.Student;
-import com.chineselearning.userservice.domain.Teacher;
-import com.chineselearning.userservice.domain.User;
-
-import com.chineselearning.userservice.domain.dao.ICredentialDao;
-import com.chineselearning.userservice.domain.dao.IStudentDao;
-import com.chineselearning.userservice.domain.dao.ITeacherDao;
-import com.chineselearning.userservice.domain.dao.IUserDao;
-
-import com.chineselearning.userservice.domain.dto.*;
-
+import com.chineselearning.userservice.dto.*;
+import com.chineselearning.userservice.entity.*;
+import com.chineselearning.userservice.exception.ConflictException;
+import com.chineselearning.userservice.exception.ResourceNotFoundException;
+import com.chineselearning.userservice.repository.CredentialRepository;
+import com.chineselearning.userservice.repository.StudentRepository;
+import com.chineselearning.userservice.repository.TeacherRepository;
+import com.chineselearning.userservice.repository.UserRepository;
+import com.chineselearning.userservice.util.Emails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class UserService
 {
-
-    private final IUserDao userDao;
-    private final IStudentDao studentDao;
-    private final ITeacherDao teacherDao;
-    private final ICredentialDao credentialDao;
-
+    private final CredentialRepository credentialRepository;
+    private final UserRepository userRepository;
+    private final StudentRepository studentRepository;
+    private final TeacherRepository teacherRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(IUserDao userDao, IStudentDao studentDao, ITeacherDao teacherDao, ICredentialDao credentialDao, PasswordEncoder passwordEncoder) {
-        this.userDao = userDao;
-        this.studentDao = studentDao;
-        this.teacherDao = teacherDao;
-        this.credentialDao = credentialDao;
+    public UserService(CredentialRepository credentialRepository, UserRepository userRepository,
+                       StudentRepository studentRepository, TeacherRepository teacherRepository,
+                       PasswordEncoder passwordEncoder)
+    {
+        this.credentialRepository = credentialRepository;
+        this.userRepository = userRepository;
+        this.studentRepository = studentRepository;
+        this.teacherRepository = teacherRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
+    // ===== Account creation =====
 
     @Transactional
-    public UserDto createUser(RegisterRequestDto request)
+    public CredentialEntity createAccount(String email, String rawPassword, String fullName, Role role)
     {
-        if (credentialDao.existsByEmail(request.getEmail()))
+        String normalizedEmail = Emails.normalize(email);
+        if (credentialRepository.existsByEmail(normalizedEmail))
         {
-            throw new IllegalArgumentException("Email already registered");
+            throw new ConflictException("Email already registered");
         }
 
-        if (!request.getRole().equals("STUDENT") && !request.getRole().equals("TEACHER"))
+        CredentialEntity credential = new CredentialEntity(normalizedEmail, passwordEncoder.encode(rawPassword), role);
+        UserEntity user = new UserEntity(fullName.trim());
+        credential.attachUser(user);
+
+        switch (role)
         {
-            throw new IllegalArgumentException("Role must be STUDENT or TEACHER");
+            case STUDENT -> user.attachStudent(new StudentEntity());
+            case TEACHER -> user.attachTeacher(new TeacherEntity());
+            case ADMIN -> { }
         }
 
-        Credential credential = new Credential();
-        credential.setEmail(request.getEmail());
-        credential.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        credential.setRole(request.getRole());
-        credential.setCreatedAt(LocalDateTime.now());
-
-        User user = new User();
-        user.setFullName(request.getFullName());
-        user.setCredential(credential);
-        credential.setUser(user);
-
-        if (request.getRole().equals("STUDENT")) {
-            Student student = new Student();
-            student.setNickname(null);
-            student.setUser(user);
-            user.setStudent(student);
-        }
-        else
-        {
-            Teacher teacher = new Teacher();
-            teacher.setTitle("");
-            teacher.setUser(user);
-            user.setTeacher(teacher);
-        }
-
-        Credential savedCredential = credentialDao.save(credential);
-
-        return mapToUserDto(savedCredential.getUser());
+        // Flush so that the generated ids are available and unique violations surface here.
+        return credentialRepository.saveAndFlush(credential);
     }
+
+    @Transactional
+    public UserDto createUser(CreateUserRequestDto request)
+    {
+        Role role = Role.valueOf(request.getRole());
+        CredentialEntity credential = createAccount(request.getEmail(), request.getPassword(), request.getFullName(), role);
+        return UserDto.from(credential.getUser());
+    }
+
+    // ===== Users =====
 
     @Transactional(readOnly = true)
     public List<UserDto> getAllUsers()
     {
-        return userDao.findAll().stream()
-                .map(this::mapToUserDto)
-                .collect(Collectors.toList());
+        return userRepository.findAllByOrderByIdAsc().stream().map(UserDto::from).toList();
     }
 
     @Transactional(readOnly = true)
     public UserDto getUserById(Long id)
     {
-        User user = userDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
-        return mapToUserDto(user);
+        return UserDto.from(findUser(id));
     }
 
     @Transactional(readOnly = true)
-    public List<UserDto> searchUsersByName(String nameFragment)
+    public List<UserDto> searchUsersByName(String fragment)
     {
-        return userDao.findByFullNameContaining(nameFragment).stream()
-                .map(this::mapToUserDto)
-                .collect(Collectors.toList());
+        return userRepository.findByFullNameContainingIgnoreCaseOrderByIdAsc(fragment.trim()).stream()
+                .map(UserDto::from)
+                .toList();
     }
-
 
     @Transactional
     public UserDto updateUserName(Long id, String newName)
     {
-        User user = userDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
-
-        user.setFullName(newName);
-        User updated = userDao.save(user);
-
-        return mapToUserDto(updated);
+        UserEntity user = findUser(id);
+        user.setFullName(newName.trim());
+        return UserDto.from(user);
     }
 
     @Transactional
     public void deleteUser(Long id)
     {
-        if (!userDao.existsById(id))
-        {
-            throw new IllegalArgumentException("User not found with id: " + id);
-        }
-
-        credentialDao.deleteById(id);
+        CredentialEntity credential = findCredential(id);
+        requireNotAdmin(credential, "Admin accounts cannot be deleted");
+        credentialRepository.delete(credential);
     }
 
+    // ===== Students and teachers =====
 
+    @Transactional(readOnly = true)
+    public List<StudentProfileDto> getAllStudents()
+    {
+        return userRepository.findByCredential_RoleOrderByIdAsc(Role.STUDENT).stream()
+                .map(StudentProfileDto::from)
+                .toList();
+    }
 
+    @Transactional(readOnly = true)
+    public List<TeacherProfileDto> getAllTeachers()
+    {
+        return userRepository.findByCredential_RoleOrderByIdAsc(Role.TEACHER).stream()
+                .map(TeacherProfileDto::from)
+                .toList();
+    }
 
     @Transactional(readOnly = true)
     public StudentDto getStudentById(Long userId)
     {
-        Student student = studentDao.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Student not found with id: " + userId));
-        return mapToStudentDto(student);
+        return StudentDto.from(findStudent(userId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<StudentDto> searchStudentsByNickname(String fragment)
+    {
+        return studentRepository.findByNicknameContainingIgnoreCase(fragment.trim()).stream()
+                .map(StudentDto::from)
+                .toList();
     }
 
     @Transactional
     public StudentDto updateStudentNickname(Long userId, String newNickname)
     {
-        if (studentDao.existsByNickname(newNickname))
+        StudentEntity student = findStudent(userId);
+        String nickname = newNickname.trim();
+
+        if (studentRepository.existsByNicknameAndUserIdNot(nickname, userId))
         {
-            throw new IllegalArgumentException("Nickname already in use");
+            throw new ConflictException("Nickname already in use");
         }
 
-        Student student = studentDao.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Student not found with id: " + userId));
-
-        student.setNickname(newNickname);
-        Student updated = studentDao.save(student);
-
-        return mapToStudentDto(updated);
+        student.setNickname(nickname);
+        return StudentDto.from(student);
     }
-
-
-
 
     @Transactional(readOnly = true)
     public TeacherDto getTeacherById(Long userId)
     {
-        Teacher teacher = teacherDao.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Teacher not found with id: " + userId));
-        return mapToTeacherDto(teacher);
+        return TeacherDto.from(findTeacher(userId));
     }
 
     @Transactional
     public TeacherDto updateTeacherTitle(Long userId, String newTitle)
     {
-        Teacher teacher = teacherDao.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Teacher not found with id: " + userId));
-
-        teacher.setTitle(newTitle);
-        Teacher updated = teacherDao.save(teacher);
-
-        return mapToTeacherDto(updated);
+        TeacherEntity teacher = findTeacher(userId);
+        teacher.setTitle(newTitle.trim());
+        return TeacherDto.from(teacher);
     }
 
-
+    // ===== Credentials =====
 
     @Transactional
     public UserDto updateEmail(Long id, String newEmail)
     {
-        if (credentialDao.existsByEmail(newEmail))
+        CredentialEntity credential = findCredential(id);
+        String email = Emails.normalize(newEmail);
+
+        if (!email.equals(credential.getEmail()))
         {
-            throw new IllegalArgumentException("Email already in use");
+            if (credentialRepository.existsByEmail(email))
+            {
+                throw new ConflictException("Email already in use");
+            }
+            credential.setEmail(email);
         }
-
-        Credential credential = credentialDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
-
-        credential.setEmail(newEmail);
-        credentialDao.save(credential);
-
-        User user = userDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
-
-        return mapToUserDto(user);
+        return UserDto.from(credential.getUser());
     }
 
     @Transactional
     public void updatePassword(Long id, String oldPassword, String newPassword)
     {
-        Credential credential = credentialDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
+        CredentialEntity credential = findCredential(id);
 
         if (!passwordEncoder.matches(oldPassword, credential.getPasswordHash()))
         {
@@ -216,148 +198,83 @@ public class UserService
         }
 
         credential.setPasswordHash(passwordEncoder.encode(newPassword));
-        credentialDao.save(credential);
+        credential.revokeTokens();
     }
 
     @Transactional
     public void adminUpdatePassword(Long id, String newPassword)
     {
-        Credential credential = credentialDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
-
+        CredentialEntity credential = findCredential(id);
         credential.setPasswordHash(passwordEncoder.encode(newPassword));
-        credentialDao.save(credential);
+        credential.revokeTokens();
     }
-
-    @Transactional(readOnly = true)
-    public List<StudentProfileDto> getAllStudents()
-    {
-        return userDao.findByRole("STUDENT").stream()
-                .map(this::mapToStudentProfileDto)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public List<TeacherProfileDto> getAllTeachers()
-    {
-        return userDao.findByRole("TEACHER").stream()
-                .map(this::mapToTeacherProfileDto)
-                .collect(Collectors.toList());
-    }
-
-    @Transactional(readOnly = true)
-    public UserDto getUserByEmail(String email)
-    {
-        User user = userDao.findById(
-                credentialDao.findByEmailAndIsActiveTrue(email)
-                        .orElseThrow(() -> new IllegalArgumentException("User not found"))
-                        .getId()
-        ).orElseThrow(() -> new IllegalArgumentException("User not found"));
-
-        return mapToUserDto(user);
-    }
-
-    @Transactional(readOnly = true)
-    public List<StudentDto> searchStudentsByNickname(String nicknameFragment)
-    {
-        return studentDao.findByNicknameContaining(nicknameFragment).stream()
-                .map(this::mapToStudentDto)
-                .collect(Collectors.toList());
-    }
-
-
 
     @Transactional
     public void banUser(Long id)
     {
-        Credential credential = credentialDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
+        CredentialEntity credential = findCredential(id);
+        requireNotAdmin(credential, "Admin accounts cannot be banned");
 
         if (!credential.isActive())
         {
-            throw new IllegalArgumentException("User is already banned");
+            throw new ConflictException("User is already banned");
         }
 
         credential.setActive(false);
-        credentialDao.save(credential);
+        credential.revokeTokens();
     }
 
     @Transactional
     public void unbanUser(Long id)
     {
-        Credential credential = credentialDao.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("User not found with id: " + id));
+        CredentialEntity credential = findCredential(id);
 
         if (credential.isActive())
         {
-            throw new IllegalArgumentException("User is not banned");
+            throw new ConflictException("User is not banned");
         }
 
         credential.setActive(true);
-        credentialDao.save(credential);
     }
 
-
-
-
-
-    
-
-    private StudentProfileDto mapToStudentProfileDto(User user)
+    @Transactional(readOnly = true)
+    public TokenStatusDto getTokenStatus(Long userId)
     {
-        boolean isBanned = !user.getCredential().isActive();
-
-        return new StudentProfileDto(
-                user.getId(),
-                user.getFullName(),
-                user.getCredential().getRole(),
-                user.getStudent() != null ? user.getStudent().getNickname() : null,
-                user.getCredential().getEmail(),
-                isBanned
-        );
+        CredentialEntity credential = findCredential(userId);
+        return new TokenStatusDto(credential.isActive(), credential.getTokenVersion());
     }
 
-    private TeacherProfileDto mapToTeacherProfileDto(User user)
+    // ===== Helpers =====
+
+    private UserEntity findUser(Long id)
     {
-        boolean isBanned = !user.getCredential().isActive();
-
-        return new TeacherProfileDto(
-                user.getId(),
-                user.getFullName(),
-                user.getCredential().getRole(),
-                user.getTeacher() != null ? user.getTeacher().getTitle() : null,
-                user.getCredential().getEmail(),
-                isBanned
-        );
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
     }
 
-
-
-
-
-    private UserDto mapToUserDto(User user) {
-
-        boolean isBanned = !user.getCredential().isActive();
-
-        return new UserDto(
-                user.getId(),
-                user.getFullName(),
-                user.getCredential().getRole(),
-                isBanned
-        );
+    private CredentialEntity findCredential(Long id)
+    {
+        return credentialRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + id));
     }
 
-    private StudentDto mapToStudentDto(Student student) {
-        return new StudentDto(
-                student.getUserId(),
-                student.getNickname()
-        );
+    private StudentEntity findStudent(Long userId)
+    {
+        return studentRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Student not found: " + userId));
     }
 
-    private TeacherDto mapToTeacherDto(Teacher teacher) {
-        return new TeacherDto(
-                teacher.getUserId(),
-                teacher.getTitle()
-        );
+    private TeacherEntity findTeacher(Long userId)
+    {
+        return teacherRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Teacher not found: " + userId));
+    }
+
+    private static void requireNotAdmin(CredentialEntity credential, String message)
+    {
+        if (credential.getRole() == Role.ADMIN)
+        {
+            throw new IllegalArgumentException(message);
+        }
     }
 }

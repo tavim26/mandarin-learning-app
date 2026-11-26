@@ -1,41 +1,34 @@
 package com.chineselearning.userservice.service;
 
-import com.chineselearning.userservice.domain.Credential;
-import com.chineselearning.userservice.domain.dao.ICredentialDao;
-
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import com.chineselearning.userservice.entity.CredentialEntity;
+import com.chineselearning.userservice.repository.CredentialRepository;
+import com.chineselearning.userservice.util.Emails;
+import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-
 @Service
 public class CustomUserDetailsService implements UserDetailsService
 {
+    private final CredentialRepository credentialRepository;
 
-    private final ICredentialDao credentialDao;
-
-    public CustomUserDetailsService(ICredentialDao credentialDao)
+    public CustomUserDetailsService(CredentialRepository credentialRepository)
     {
-        this.credentialDao = credentialDao;
+        this.credentialRepository = credentialRepository;
     }
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException
     {
-        Credential credential = credentialDao.findByEmail(email)
-                .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        CredentialEntity credential = credentialRepository.findByEmail(Emails.normalize(email))
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
 
-        return new org.springframework.security.core.userdetails.User(
-                credential.getEmail(),
-                credential.getPasswordHash(),
-                credential.isActive(),
-                true,
-                true,
-                true,
-                List.of(new SimpleGrantedAuthority("ROLE_" + credential.getRole()))
-        );
+        // Bans are checked by AuthService after the password, so they are not revealed to strangers.
+        return User.withUsername(credential.getEmail())
+                .password(credential.getPasswordHash())
+                .roles(credential.getRole().name())
+                .build();
     }
 }

@@ -1,41 +1,42 @@
 package com.chineselearning.userservice.service;
 
+import com.chineselearning.userservice.entity.CredentialEntity;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Date;
-import java.util.Map;
 
 @Service
-public class JwtService {
+public class JwtService
+{
+    private final SecretKey signingKey;
+    private final Duration expiration;
 
-    @Value("${application.security.jwt.secret-key}")
-    private String secretKey;
-
-    @Value("${application.security.jwt.expiration}")
-    private long jwtExpiration;
-
-
-    public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails)
+    public JwtService(@Value("${application.security.jwt.secret-key}") String secretKey,
+                      @Value("${application.security.jwt.expiration}") long expirationMillis)
     {
-        return Jwts.builder()
-                .setClaims(extraClaims)
-                .setSubject(userDetails.getUsername())
-                .setIssuedAt(new Date(System.currentTimeMillis()))
-                .setExpiration(new Date(System.currentTimeMillis() + jwtExpiration))
-                .signWith(getSignInKey(), SignatureAlgorithm.HS256)
-                .compact();
+        this.signingKey = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secretKey));
+        this.expiration = Duration.ofMillis(expirationMillis);
     }
 
-    private Key getSignInKey()
+    public String generateToken(CredentialEntity credential)
     {
-        byte[] keyBytes = Decoders.BASE64.decode(secretKey);
-        return Keys.hmacShaKeyFor(keyBytes);
+        Instant now = Instant.now();
+
+        return Jwts.builder()
+                .subject(credential.getEmail())
+                .claim("userId", credential.getId())
+                .claim("role", credential.getRole().name())
+                .claim("ver", credential.getTokenVersion())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(expiration)))
+                .signWith(signingKey, Jwts.SIG.HS256)
+                .compact();
     }
 }

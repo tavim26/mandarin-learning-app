@@ -1,50 +1,42 @@
 package com.chineselearning.userservice.config;
 
-import com.chineselearning.userservice.domain.Credential;
-import com.chineselearning.userservice.domain.User;
-import com.chineselearning.userservice.domain.dao.ICredentialDao;
-
+import com.chineselearning.userservice.entity.Role;
+import com.chineselearning.userservice.repository.CredentialRepository;
+import com.chineselearning.userservice.service.UserService;
+import com.chineselearning.userservice.util.Emails;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
 
 /**
- * Creates the initial administrator account on startup.
- * Admin accounts cannot be created through public registration, so the first one
- * is configured with the ADMIN_EMAIL and ADMIN_PASSWORD environment variables.
+ * Creates the initial administrator account on startup from ADMIN_EMAIL and ADMIN_PASSWORD,
+ * since admin accounts cannot be created through the API.
  */
 @Component
 public class AdminAccountInitializer implements ApplicationRunner
 {
-
     private static final Logger log = LoggerFactory.getLogger(AdminAccountInitializer.class);
 
-    private final ICredentialDao credentialDao;
-    private final PasswordEncoder passwordEncoder;
+    private final CredentialRepository credentialRepository;
+    private final UserService userService;
     private final String adminEmail;
     private final String adminPassword;
 
-    public AdminAccountInitializer(
-            ICredentialDao credentialDao,
-            PasswordEncoder passwordEncoder,
-            @Value("${application.admin.email:}") String adminEmail,
-            @Value("${application.admin.password:}") String adminPassword)
+    public AdminAccountInitializer(CredentialRepository credentialRepository,
+                                   UserService userService,
+                                   @Value("${application.admin.email:}") String adminEmail,
+                                   @Value("${application.admin.password:}") String adminPassword)
     {
-        this.credentialDao = credentialDao;
-        this.passwordEncoder = passwordEncoder;
+        this.credentialRepository = credentialRepository;
+        this.userService = userService;
         this.adminEmail = adminEmail;
         this.adminPassword = adminPassword;
     }
 
     @Override
-    @Transactional
     public void run(ApplicationArguments args)
     {
         if (adminEmail.isBlank() || adminPassword.isBlank())
@@ -53,22 +45,13 @@ public class AdminAccountInitializer implements ApplicationRunner
             return;
         }
 
-        if (credentialDao.existsByEmail(adminEmail))
+        String email = Emails.normalize(adminEmail);
+        if (credentialRepository.existsByEmail(email))
         {
             return;
         }
 
-        Credential credential = new Credential();
-        credential.setEmail(adminEmail);
-        credential.setPasswordHash(passwordEncoder.encode(adminPassword));
-        credential.setRole("ADMIN");
-        credential.setCreatedAt(LocalDateTime.now());
-
-        User user = new User();
-        user.setFullName("Administrator");
-        credential.setUser(user);
-
-        credentialDao.save(credential);
-        log.info("Created initial admin account {}", adminEmail);
+        userService.createAccount(email, adminPassword, "Administrator", Role.ADMIN);
+        log.info("Created initial admin account {}", email);
     }
 }

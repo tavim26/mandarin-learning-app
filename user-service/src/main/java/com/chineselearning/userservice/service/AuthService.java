@@ -1,94 +1,60 @@
 package com.chineselearning.userservice.service;
 
-import com.chineselearning.userservice.domain.Credential;
-import com.chineselearning.userservice.domain.Student;
-import com.chineselearning.userservice.domain.Teacher;
-import com.chineselearning.userservice.domain.User;
-
-import com.chineselearning.userservice.domain.dao.ICredentialDao;
-import com.chineselearning.userservice.domain.dto.*;
+import com.chineselearning.userservice.dto.AuthResponseDto;
+import com.chineselearning.userservice.dto.LoginRequestDto;
+import com.chineselearning.userservice.dto.RegisterResponseDto;
+import com.chineselearning.userservice.dto.StudentRegisterRequestDto;
+import com.chineselearning.userservice.entity.CredentialEntity;
+import com.chineselearning.userservice.entity.Role;
+import com.chineselearning.userservice.repository.CredentialRepository;
+import com.chineselearning.userservice.util.Emails;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
 
 @Service
 public class AuthService
 {
-
-    private final ICredentialDao credentialDao;
-    private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService;
-    private final CustomUserDetailsService userDetailsService;
     private final AuthenticationManager authenticationManager;
+    private final CredentialRepository credentialRepository;
+    private final UserService userService;
+    private final JwtService jwtService;
 
-    public AuthService(ICredentialDao credentialDao, PasswordEncoder passwordEncoder, JwtService jwtService, CustomUserDetailsService userDetailsService, AuthenticationManager authenticationManager)
+    public AuthService(AuthenticationManager authenticationManager, CredentialRepository credentialRepository,
+                       UserService userService, JwtService jwtService)
     {
-        this.credentialDao = credentialDao;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService = jwtService;
-        this.userDetailsService = userDetailsService;
         this.authenticationManager = authenticationManager;
+        this.credentialRepository = credentialRepository;
+        this.userService = userService;
+        this.jwtService = jwtService;
     }
-
 
     @Transactional
     public RegisterResponseDto register(StudentRegisterRequestDto request)
     {
-        if (credentialDao.existsByEmail(request.getEmail()))
-        {
-            throw new IllegalArgumentException("Email already registered");
-        }
+        CredentialEntity credential = userService.createAccount(request.getEmail(), request.getPassword(), request.getFullName(), Role.STUDENT);
 
-        Credential credential = new Credential();
-        credential.setEmail(request.getEmail());
-        credential.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        credential.setRole("STUDENT");
-        credential.setCreatedAt(LocalDateTime.now());
-
-        User user = new User();
-        user.setFullName(request.getFullName());
-        user.setCredential(credential);
-        credential.setUser(user);
-
-        Student student = new Student();
-        student.setUser(user);
-        user.setStudent(student);
-
-        Credential saved = credentialDao.save(credential);
-
-        return new RegisterResponseDto(saved.getId(), saved.getRole(), saved.getUser().getFullName());
+        return new RegisterResponseDto(credential.getId(), credential.getRole(), credential.getUser().getFullName());
     }
 
-
-
-    public AuthResponseDto login(AuthRequestDto request)
+    @Transactional(readOnly = true)
+    public AuthResponseDto login(LoginRequestDto request)
     {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        String email = Emails.normalize(request.getEmail());
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(email, request.getPassword()));
 
-        Credential credential = credentialDao.findByEmailAndIsActiveTrue(request.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid credentials"));
+        CredentialEntity credential = credentialRepository.findByEmail(email).orElseThrow(() -> new BadCredentialsException("Invalid credentials"));
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(credential.getEmail());
-
-        Map<String, Object> extraClaims = new HashMap<>();
-        extraClaims.put("userId", credential.getId());
-        extraClaims.put("role", credential.getRole());
-        String token = jwtService.generateToken(extraClaims, userDetails);
+        if (!credential.isActive())
+        {
+            throw new DisabledException("Account is banned");
+        }
 
         return new AuthResponseDto(
-                token,
+                jwtService.generateToken(credential),
                 credential.getId(),
                 credential.getRole(),
                 credential.getUser().getFullName()
