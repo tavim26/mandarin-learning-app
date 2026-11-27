@@ -1,210 +1,110 @@
 package com.chineselearning.flashcardservice.service;
 
-import com.chineselearning.flashcardservice.domain.Flashcard;
-import com.chineselearning.flashcardservice.domain.FlashcardProgress;
-import com.chineselearning.flashcardservice.domain.FlashcardReview;
-
-import com.chineselearning.flashcardservice.domain.dao.IFlashcardDao;
-import com.chineselearning.flashcardservice.domain.dao.IFlashcardProgressDao;
-import com.chineselearning.flashcardservice.domain.dao.IFlashcardReviewDao;
-
-import com.chineselearning.flashcardservice.domain.dto.FlashcardProgressDto;
-import com.chineselearning.flashcardservice.domain.dto.FlashcardReviewDto;
-import com.chineselearning.flashcardservice.domain.dto.ReviewResultDto;
-import com.chineselearning.flashcardservice.domain.dto.SubmitReviewRequest;
-
-import org.springframework.http.HttpStatus;
+import com.chineselearning.flashcardservice.dto.FlashcardProgressDto;
+import com.chineselearning.flashcardservice.dto.FlashcardReviewDto;
+import com.chineselearning.flashcardservice.dto.ReviewResultDto;
+import com.chineselearning.flashcardservice.dto.SubmitReviewRequest;
+import com.chineselearning.flashcardservice.entity.Flashcard;
+import com.chineselearning.flashcardservice.entity.FlashcardProgress;
+import com.chineselearning.flashcardservice.entity.FlashcardReview;
+import com.chineselearning.flashcardservice.exception.ResourceNotFoundException;
+import com.chineselearning.flashcardservice.repository.FlashcardProgressRepository;
+import com.chineselearning.flashcardservice.repository.FlashcardRepository;
+import com.chineselearning.flashcardservice.repository.FlashcardReviewRepository;
+import com.chineselearning.flashcardservice.scheduling.Sm2Scheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
-public class ReviewService
-{
+public class ReviewService {
 
-    private final IFlashcardDao flashcardDao;
-    private final IFlashcardProgressDao flashcardProgressDao;
-    private final IFlashcardReviewDao flashcardReviewDao;
+    private final FlashcardRepository flashcardRepository;
+    private final FlashcardProgressRepository progressRepository;
+    private final FlashcardReviewRepository reviewRepository;
+    private final FlashcardAccess access;
+    private final Clock clock;
 
-    public ReviewService(IFlashcardDao flashcardDao, IFlashcardProgressDao flashcardProgressDao, IFlashcardReviewDao flashcardReviewDao)
-    {
-        this.flashcardDao = flashcardDao;
-        this.flashcardProgressDao = flashcardProgressDao;
-        this.flashcardReviewDao = flashcardReviewDao;
+    public ReviewService(FlashcardRepository flashcardRepository,
+                         FlashcardProgressRepository progressRepository,
+                         FlashcardReviewRepository reviewRepository,
+                         FlashcardAccess access,
+                         Clock clock) {
+        this.flashcardRepository = flashcardRepository;
+        this.progressRepository = progressRepository;
+        this.reviewRepository = reviewRepository;
+        this.access = access;
+        this.clock = clock;
     }
 
     @Transactional
-    public ReviewResultDto submitReview(Long studentId, SubmitReviewRequest request)
-    {
-        Flashcard flashcard = flashcardDao.findById(request.getFlashcardId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Flashcard with ID" + request.getFlashcardId() + " does not exist"));
+    public ReviewResultDto submitReview(Long userId, SubmitReviewRequest request) {
+        Flashcard card = access.requireOwnedCard(userId, request.flashcardId());
 
-        FlashcardProgress progress = flashcardProgressDao
-                .findByStudentIdAndFlashcardId(studentId, request.getFlashcardId())
-                .orElseGet(() -> createInitialProgress(studentId, flashcard.getId()));
+        // Race-free: create the row if it is missing, then lock it so concurrent reviews run one by one.
+        progressRepository.insertIfAbsent(userId, card.getId());
+        FlashcardProgress progress = progressRepository.findForUpdate(userId, card.getId())
+                .orElseThrow(() -> new IllegalStateException("Progress row missing after insert"));
 
-        Sm2Result result = Sm2Algorithm.calculate(
+        LocalDateTime now = LocalDateTime.now(clock);
+        Sm2Scheduler.Result result = Sm2Scheduler.schedule(
                 progress.getEasinessFactor(),
                 progress.getIntervalDays(),
                 progress.getRepetitionCount(),
-                request.getQuality()
-        );
+                request.quality(),
+                now.toLocalDate());
+        progress.apply(result, now); // dirty checking persists it
 
-        progress.setEasinessFactor(result.getEasinessFactor());
-        progress.setIntervalDays(result.getIntervalDays());
-        progress.setRepetitionCount(result.getRepetitionCount());
-        progress.setNextReviewAt(result.getNextReviewAt());
-        progress.setLastReviewedAt(LocalDateTime.now());
-        FlashcardProgress savedProgress = flashcardProgressDao.save(progress);
-
-        FlashcardReview review = new FlashcardReview();
-        review.setStudentId(studentId);
-        review.setFlashcardId(request.getFlashcardId());
-        review.setReviewedAt(LocalDateTime.now());
-        review.setQuality(request.getQuality());
-        FlashcardReview savedReview = flashcardReviewDao.save(review);
-
-        ReviewResultDto resultDto = new ReviewResultDto();
-        resultDto.setReview(toReviewDto(savedReview));
-        resultDto.setProgress(toProgressDto(savedProgress));
-        return resultDto;
+        FlashcardReview review = reviewRepository.save(FlashcardReview.of(userId, card, request.quality(), now));
+        return new ReviewResultDto(FlashcardReviewDto.from(review), FlashcardProgressDto.from(progress));
     }
 
-
-
     @Transactional(readOnly = true)
-    public List<FlashcardProgressDto> getDueFlashcards(Long userId, Long studentId, Long setId)
-    {
+    public List<FlashcardProgressDto> getDueFlashcards(Long userId, Long studentId, Long setId) {
+        access.requireSelf(userId, studentId);
+        access.requireOwnedSet(userId, setId);
 
-        verifyStudentAccess(userId, studentId);
-
-        List<Flashcard> allCards = flashcardDao.findBySetId(setId);
-
-        if (allCards.isEmpty())
-        {
+        List<Long> cardIds = flashcardRepository.findIdsBySetId(setId);
+        if (cardIds.isEmpty()) {
             return List.of();
         }
-
-        List<Long> allCardIds = allCards.stream()
-                .map(Flashcard::getId)
-                .toList();
-
-        List<FlashcardProgress> existingProgress = flashcardProgressDao
-                .findByStudentIdAndFlashcardIdIn(studentId, allCardIds);
-
-        Set<Long> seenCardIds = existingProgress.stream()
-                .map(FlashcardProgress::getFlashcardId)
-                .collect(Collectors.toSet());
+        List<FlashcardProgress> existing = progressRepository.findByStudentIdAndFlashcardIdIn(studentId, cardIds);
+        Set<Long> seen = existing.stream().map(p -> p.getFlashcard().getId()).collect(Collectors.toSet());
+        LocalDateTime now = LocalDateTime.now(clock);
 
         List<FlashcardProgressDto> result = new ArrayList<>();
-
-        LocalDateTime now = LocalDateTime.now();
-        existingProgress.stream()
+        existing.stream()
                 .filter(p -> p.getNextReviewAt() != null && !p.getNextReviewAt().isAfter(now))
-                .map(this::toProgressDto)
+                .sorted(Comparator.comparing(FlashcardProgress::getNextReviewAt).thenComparing(FlashcardProgress::getId))
+                .map(FlashcardProgressDto::from)
                 .forEach(result::add);
-
-        allCards.stream()
-                .filter(card -> !seenCardIds.contains(card.getId()))
-                .map(card -> toDefaultProgressDto(studentId, card.getId()))
+        cardIds.stream()
+                .filter(id -> !seen.contains(id))
+                .map(id -> FlashcardProgressDto.unseen(studentId, id))
                 .forEach(result::add);
-
         return result;
     }
 
     @Transactional(readOnly = true)
-    public List<FlashcardReviewDto> getReviewHistory(Long userId, Long studentId, Long flashcardId)
-    {
-        verifyStudentAccess(userId, studentId);
-
-        return flashcardReviewDao
-                .findByStudentIdAndFlashcardIdOrderByReviewedAtAsc(studentId, flashcardId)
-                .stream()
-                .map(this::toReviewDto)
-                .toList();
+    public List<FlashcardReviewDto> getReviewHistory(Long userId, Long studentId, Long flashcardId) {
+        access.requireSelf(userId, studentId);
+        return reviewRepository.findByStudentIdAndFlashcardIdOrderByReviewedAtAscIdAsc(studentId, flashcardId)
+                .stream().map(FlashcardReviewDto::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public FlashcardProgressDto getProgress(Long userId, Long studentId, Long flashcardId)
-    {
-        verifyStudentAccess(userId, studentId);
-
-        FlashcardProgress progress = flashcardProgressDao
-                .findByStudentIdAndFlashcardId(studentId, flashcardId)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "There is not progress for student " + studentId + " and flashcard " + flashcardId));
-        return toProgressDto(progress);
-    }
-
-
-
-
-
-    private void verifyStudentAccess(Long userId, Long studentId)
-    {
-        if (!userId.equals(studentId))
-        {
-            throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN,
-                    "Access forbidden: you cannot access other students cards.");
-        }
-    }
-
-    private FlashcardProgress createInitialProgress(Long studentId, Long flashcardId)
-    {
-        FlashcardProgress progress = new FlashcardProgress();
-        progress.setStudentId(studentId);
-        progress.setFlashcardId(flashcardId);
-        progress.setEasinessFactor(new BigDecimal("2.5"));
-        progress.setIntervalDays(0);
-        progress.setRepetitionCount(0);
-        return progress;
-    }
-
-    private FlashcardProgressDto toDefaultProgressDto(Long studentId, Long flashcardId)
-    {
-        FlashcardProgressDto dto = new FlashcardProgressDto();
-        dto.setId(null);
-        dto.setStudentId(studentId);
-        dto.setFlashcardId(flashcardId);
-        dto.setEasinessFactor(new BigDecimal("2.5"));
-        dto.setIntervalDays(0);
-        dto.setRepetitionCount(0);
-        dto.setNextReviewAt(null);
-        dto.setLastReviewedAt(null);
-        return dto;
-    }
-
-    private FlashcardProgressDto toProgressDto(FlashcardProgress progress)
-    {
-        FlashcardProgressDto dto = new FlashcardProgressDto();
-        dto.setId(progress.getId());
-        dto.setStudentId(progress.getStudentId());
-        dto.setFlashcardId(progress.getFlashcardId());
-        dto.setEasinessFactor(progress.getEasinessFactor());
-        dto.setIntervalDays(progress.getIntervalDays());
-        dto.setRepetitionCount(progress.getRepetitionCount());
-        dto.setNextReviewAt(progress.getNextReviewAt());
-        dto.setLastReviewedAt(progress.getLastReviewedAt());
-        return dto;
-    }
-
-    private FlashcardReviewDto toReviewDto(FlashcardReview review)
-    {
-        FlashcardReviewDto dto = new FlashcardReviewDto();
-        dto.setId(review.getId());
-        dto.setStudentId(review.getStudentId());
-        dto.setFlashcardId(review.getFlashcardId());
-        dto.setReviewedAt(review.getReviewedAt());
-        dto.setQuality(review.getQuality());
-        return dto;
+    public FlashcardProgressDto getProgress(Long userId, Long studentId, Long flashcardId) {
+        access.requireSelf(userId, studentId);
+        return progressRepository.findByStudentIdAndFlashcardId(studentId, flashcardId)
+                .map(FlashcardProgressDto::from)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No progress for student " + studentId + " and flashcard " + flashcardId));
     }
 }

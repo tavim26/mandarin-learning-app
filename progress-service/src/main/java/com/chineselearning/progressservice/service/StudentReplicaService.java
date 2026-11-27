@@ -1,64 +1,41 @@
 package com.chineselearning.progressservice.service;
 
-import com.chineselearning.progressservice.domain.StudentReplica;
-import com.chineselearning.progressservice.domain.dao.IStudentReplicaDao;
-import com.chineselearning.progressservice.domain.dto.StudentReplicaDto;
-
+import com.chineselearning.progressservice.dto.StudentReplicaDto;
+import com.chineselearning.progressservice.exception.ResourceNotFoundException;
+import com.chineselearning.progressservice.repository.StudentReplicaRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
-@Transactional
-public class StudentReplicaService
-{
+@Transactional(readOnly = true)
+public class StudentReplicaService {
 
-    private final IStudentReplicaDao studentReplicaDao;
+    private final StudentReplicaRepository replicaRepository;
 
-    public StudentReplicaService(IStudentReplicaDao studentReplicaDao)
-    {
-        this.studentReplicaDao = studentReplicaDao;
+    public StudentReplicaService(StudentReplicaRepository replicaRepository) {
+        this.replicaRepository = replicaRepository;
     }
 
-    @Transactional(readOnly = true)
-    public List<StudentReplicaDto> getAllStudents()
-    {
-        return studentReplicaDao.findAllOrderByXpTotalDesc().stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
+    public List<StudentReplicaDto> getAllStudents() {
+        return replicaRepository.findAll(Sort.by(Sort.Direction.DESC, "xpTotal").and(Sort.by("studentId")))
+                .stream().map(StudentReplicaDto::from).toList();
     }
 
-    @Transactional(readOnly = true)
-    public Optional<StudentReplicaDto> getStudentById(Long studentId)
-    {
-        return studentReplicaDao.findById(studentId)
-                .map(this::mapToDto);
+    public StudentReplicaDto getStudent(Long studentId) {
+        return replicaRepository.findById(studentId)
+                .map(StudentReplicaDto::from)
+                .orElseThrow(() -> new ResourceNotFoundException("Student " + studentId + " has no progress yet"));
     }
 
-    @Transactional(readOnly = true)
-    public boolean studentExists(Long studentId)
-    {
-        return studentReplicaDao.existsByStudentId(studentId);
+    public boolean studentExists(Long studentId) {
+        return replicaRepository.existsById(studentId);
     }
 
-    @Transactional(readOnly = true)
-    public List<StudentReplicaDto> getLeaderboard()
-    {
-        return studentReplicaDao.findTop10OrderByXpTotalDesc()
-                .stream()
-                .map(this::mapToDto)
-                .collect(Collectors.toList());
-    }
-
-    private StudentReplicaDto mapToDto(StudentReplica replica)
-    {
-        return new StudentReplicaDto(
-                replica.getStudentId(),
-                replica.getXpTotal(),
-                replica.getLevel()
-        );
+    public List<StudentReplicaDto> getLeaderboard() {
+        return replicaRepository.findTop10ByOrderByXpTotalDescStudentIdAsc().stream()
+                .map(StudentReplicaDto::from).toList();
     }
 }

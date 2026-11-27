@@ -1,96 +1,58 @@
 package com.chineselearning.progressservice.controller;
 
-import com.chineselearning.progressservice.domain.dto.StudentReplicaDto;
-
+import com.chineselearning.progressservice.dto.StudentReplicaDto;
+import com.chineselearning.progressservice.security.CurrentUser;
+import com.chineselearning.progressservice.security.ProgressAccessPolicy;
 import com.chineselearning.progressservice.service.StudentReplicaService;
-
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/progress/students")
-@Tag(name = "Student Progress Summary", description = "Endpoints for managing student XP, level, and leaderboard")
-public class StudentReplicaController
-{
+@Tag(name = "Student Progress Summary", description = "Student XP, level and leaderboard")
+public class StudentReplicaController {
 
-    private final StudentReplicaService studentReplicaService;
+    private final StudentReplicaService replicaService;
+    private final ProgressAccessPolicy accessPolicy;
 
-    public StudentReplicaController(StudentReplicaService studentReplicaService)
-    {
-        this.studentReplicaService = studentReplicaService;
+    public StudentReplicaController(StudentReplicaService replicaService, ProgressAccessPolicy accessPolicy) {
+        this.replicaService = replicaService;
+        this.accessPolicy = accessPolicy;
     }
 
     @GetMapping("/leaderboard")
-    @Operation(
-            summary = "Get the global leaderboard",
-            description = "Returns the top 10 students ordered by total XP accumulated across all lessons."
-    )
-    public ResponseEntity<List<StudentReplicaDto>> getLeaderboard()
-    {
-        return ResponseEntity.ok(studentReplicaService.getLeaderboard());
-    }
-
-    @GetMapping("/{studentId}")
-    @Operation(
-            summary = "Get a student's progress summary",
-            description = "Returns the total XP and current level of the student."
-    )
-    public ResponseEntity<?> getStudentById(
-            @PathVariable Long studentId,
-            @RequestHeader("X-User-Id") Long authenticatedUserId,
-            @RequestHeader("X-User-Role") String role)
-    {
-        if (isForbidden(studentId, authenticatedUserId, role)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access forbidden");
-        }
-
-        Optional<StudentReplicaDto> student = studentReplicaService.getStudentById(studentId);
-        return student
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @GetMapping("/{studentId}/exists")
-    @Operation(
-            summary = "Check whether a student's replica exists",
-            description = "Returns true if the student has submitted at least one attempt and the replica has been created."
-    )
-    public ResponseEntity<?> studentExists(
-            @PathVariable Long studentId,
-            @RequestHeader("X-User-Id") Long authenticatedUserId,
-            @RequestHeader("X-User-Role") String role)
-    {
-        if (isForbidden(studentId, authenticatedUserId, role)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access forbidden");
-        }
-
-        return ResponseEntity.ok(studentReplicaService.studentExists(studentId));
+    @Operation(summary = "Global top 10 by XP")
+    public List<StudentReplicaDto> getLeaderboard() {
+        return replicaService.getLeaderboard();
     }
 
     @GetMapping("/admin/all")
-    @Operation(
-            summary = "Get all student replicas (admin)",
-            description = "Returns the progress summaries of all students. Access restricted to ADMIN."
-    )
-    public ResponseEntity<?> getAllStudents(@RequestHeader("X-User-Role") String role)
-    {
-        if (!"ADMIN".equals(role))
-        {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Access forbidden");
-        }
-
-        return ResponseEntity.ok(studentReplicaService.getAllStudents());
+    @Operation(summary = "All student replicas (admin only)")
+    public List<StudentReplicaDto> getAllStudents(@Parameter(hidden = true) CurrentUser user) {
+        accessPolicy.assertAdmin(user);
+        return replicaService.getAllStudents();
     }
 
+    @GetMapping("/{studentId}")
+    @Operation(summary = "Get a student's XP and level")
+    public StudentReplicaDto getStudent(@PathVariable Long studentId,
+                                        @Parameter(hidden = true) CurrentUser user) {
+        accessPolicy.assertCanViewStudent(user, studentId);
+        return replicaService.getStudent(studentId);
+    }
 
-    private boolean isForbidden(Long requestedStudentId, Long authenticatedUserId, String role)
-    {
-        return "STUDENT".equals(role) && !authenticatedUserId.equals(requestedStudentId);
+    @GetMapping("/{studentId}/exists")
+    @Operation(summary = "Whether the student has a replica (at least one attempt)")
+    public boolean studentExists(@PathVariable Long studentId,
+                                 @Parameter(hidden = true) CurrentUser user) {
+        accessPolicy.assertCanViewStudent(user, studentId);
+        return replicaService.studentExists(studentId);
     }
 }
