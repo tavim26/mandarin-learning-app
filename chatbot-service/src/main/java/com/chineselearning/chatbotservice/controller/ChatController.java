@@ -1,23 +1,35 @@
 package com.chineselearning.chatbotservice.controller;
 
-import com.chineselearning.chatbotservice.domain.dto.*;
+import com.chineselearning.chatbotservice.dto.ChatMessageDto;
+import com.chineselearning.chatbotservice.dto.ChatSessionDto;
+import com.chineselearning.chatbotservice.dto.CreateSessionRequest;
+import com.chineselearning.chatbotservice.dto.PagedResponse;
+import com.chineselearning.chatbotservice.dto.SendMessageRequest;
+import com.chineselearning.chatbotservice.dto.SendMessageResponse;
 import com.chineselearning.chatbotservice.service.ChatService;
-import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.file.AccessDeniedException;
 import java.util.List;
-
-
-// http://localhost:8084/swagger-ui/index.html
 
 @RestController
 @RequestMapping("/api/chatbot")
-public class ChatController
-{
+public class ChatController {
 
     private final ChatService chatService;
 
@@ -26,108 +38,71 @@ public class ChatController
         this.chatService = chatService;
     }
 
-
     @PostMapping("/sessions")
     public ResponseEntity<ChatSessionDto> createSession(
             @RequestHeader("X-User-Id") Long studentId,
-            @RequestBody CreateSessionRequest request)
-    {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(chatService.createSession(studentId, request));
+            @Valid @RequestBody CreateSessionRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(chatService.createSession(studentId, request));
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<ChatSessionDto>> getSessionsByStudent(
-            @RequestHeader("X-User-Id") Long requestingStudentId)
-    {
-        return ResponseEntity.ok(chatService.getSessionsByStudent(requestingStudentId));
+    public List<ChatSessionDto> getSessions(@RequestHeader("X-User-Id") Long studentId) {
+        return chatService.getSessions(studentId);
+    }
+
+    @GetMapping("/sessions/paged")
+    public PagedResponse<ChatSessionDto> getSessionsPaged(
+            @RequestHeader("X-User-Id") Long studentId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size) {
+        return chatService.getSessionsPaged(studentId, page, size);
     }
 
     @PatchMapping("/sessions/{sessionId}/end")
-    public ResponseEntity<ChatSessionDto> endSession(
+    public ChatSessionDto endSession(
             @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId) throws java.nio.file.AccessDeniedException {
-        return ResponseEntity.ok(chatService.endSession(sessionId, requestingStudentId));
+            @RequestHeader("X-User-Id") Long studentId) {
+        return chatService.endSession(sessionId, studentId);
     }
-
-
-
-    @PostMapping("/sessions/{sessionId}/messages")
-    public ResponseEntity<SendMessageResponse> sendMessage(
-            @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId,
-            @Valid @RequestBody SendMessageRequest request) throws java.nio.file.AccessDeniedException {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(chatService.sendMessage(sessionId, requestingStudentId, request));
-    }
-
-    @GetMapping("/sessions/{sessionId}/messages")
-    public ResponseEntity<List<ChatMessageDto>> getMessages(
-            @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId) throws AccessDeniedException {
-        return ResponseEntity.ok(chatService.getMessages(sessionId, requestingStudentId));
-    }
-
-
-    @GetMapping("/sessions/paged")
-    public ResponseEntity<PagedResponse<ChatSessionDto>> getSessionsByStudentPaged(
-            @RequestHeader("X-User-Id") Long requestingStudentId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size)
-    {
-        return ResponseEntity.ok(chatService.getSessionsByStudentPaged(requestingStudentId, page, size));
-    }
-
-    @GetMapping("/sessions/{sessionId}/messages/paged")
-    public ResponseEntity<PagedResponse<ChatMessageDto>> getMessagesPaged(
-            @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) throws AccessDeniedException {
-        return ResponseEntity.ok(chatService.getMessagesPaged(sessionId, requestingStudentId, page, size));
-    }
-
 
     @PatchMapping("/sessions/{sessionId}/rename")
-    public ResponseEntity<ChatSessionDto> renameSession(
+    public ChatSessionDto renameSession(
             @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId,
-            @RequestParam String newTitle) throws AccessDeniedException {
-        return ResponseEntity.ok(chatService.renameSession(sessionId, requestingStudentId, newTitle));
+            @RequestHeader("X-User-Id") Long studentId,
+            @RequestParam @NotBlank @Size(max = 255) String newTitle) {
+        return chatService.renameSession(sessionId, studentId, newTitle);
     }
 
     @DeleteMapping("/sessions/{sessionId}")
     public ResponseEntity<Void> deleteSession(
             @PathVariable Long sessionId,
-            @RequestHeader("X-User-Id") Long requestingStudentId) throws AccessDeniedException {
-        chatService.deleteSession(sessionId, requestingStudentId);
+            @RequestHeader("X-User-Id") Long studentId) {
+        chatService.deleteSession(sessionId, studentId);
         return ResponseEntity.noContent().build();
     }
 
-
-
-
-    @ExceptionHandler(EntityNotFoundException.class)
-    public ResponseEntity<String> handleNotFound(EntityNotFoundException e)
-    {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+    @PostMapping("/sessions/{sessionId}/messages")
+    public ResponseEntity<SendMessageResponse> sendMessage(
+            @PathVariable Long sessionId,
+            @RequestHeader("X-User-Id") Long studentId,
+            @Valid @RequestBody SendMessageRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(chatService.sendMessage(sessionId, studentId, request.content()));
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<String> handleIllegalState(IllegalStateException e)
-    {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
+    @GetMapping("/sessions/{sessionId}/messages")
+    public List<ChatMessageDto> getMessages(
+            @PathVariable Long sessionId,
+            @RequestHeader("X-User-Id") Long studentId) {
+        return chatService.getMessages(sessionId, studentId);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<String> handleAccessDenied(AccessDeniedException e)
-    {
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-    }
-
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<String> handleAiUnavailable(RuntimeException e)
-    {
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(e.getMessage());
+    @GetMapping("/sessions/{sessionId}/messages/paged")
+    public PagedResponse<ChatMessageDto> getMessagesPaged(
+            @PathVariable Long sessionId,
+            @RequestHeader("X-User-Id") Long studentId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return chatService.getMessagesPaged(sessionId, studentId, page, size);
     }
 }
