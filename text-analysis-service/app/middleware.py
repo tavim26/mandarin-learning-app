@@ -15,12 +15,14 @@ class ContentLengthLimitMiddleware:
         self._app = app
         self._max_body_bytes = max_body_bytes
 
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "http" and self._announced_size(scope) > self._max_body_bytes:
             response = problem_response(413, "Payload Too Large", "The request body is too large")
             await response(scope, receive, send)
             return
         await self._app(scope, receive, send)
+
 
     @staticmethod
     def _announced_size(scope: Scope) -> int:

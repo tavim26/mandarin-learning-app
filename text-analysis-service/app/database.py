@@ -18,6 +18,5 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
 
 
 def session_scope(factory: sessionmaker[Session]) -> Iterator[Session]:
-    """One session per request. Anything not committed is rolled back when the session closes."""
     with factory() as session:
         yield session

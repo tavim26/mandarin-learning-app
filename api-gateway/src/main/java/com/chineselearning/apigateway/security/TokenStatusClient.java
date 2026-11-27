@@ -39,10 +39,7 @@ public class TokenStatusClient
                 .build();
     }
 
-    /**
-     * @return the status, or empty if the user no longer exists
-     * @throws UserServiceUnavailableException if user-service cannot be reached
-     */
+
     public Optional<TokenStatus> getStatus(long userId)
     {
         Instant now = Instant.now();

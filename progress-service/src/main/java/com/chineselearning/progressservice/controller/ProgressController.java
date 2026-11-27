@@ -33,9 +33,7 @@ public class ProgressController {
     private final ProgressQueryService queryService;
     private final ProgressAccessPolicy accessPolicy;
 
-    public ProgressController(AttemptService attemptService,
-                              ProgressQueryService queryService,
-                              ProgressAccessPolicy accessPolicy) {
+    public ProgressController(AttemptService attemptService, ProgressQueryService queryService, ProgressAccessPolicy accessPolicy) {
         this.attemptService = attemptService;
         this.queryService = queryService;
         this.accessPolicy = accessPolicy;
@@ -43,9 +41,7 @@ public class ProgressController {
 
     @PostMapping("/attempts")
     @Operation(summary = "Submit an exercise attempt")
-    public ResponseEntity<ExerciseAttemptDto> submitAttempt(
-            @Valid @RequestBody SubmitAttemptRequest request,
-            @Parameter(hidden = true) CurrentUser user) {
+    public ResponseEntity<ExerciseAttemptDto> submitAttempt(@Valid @RequestBody SubmitAttemptRequest request, @Parameter(hidden = true) CurrentUser user) {
         accessPolicy.assertCanSubmitAttempts(user);
         return ResponseEntity.status(HttpStatus.CREATED).body(attemptService.submitAttempt(user.id(), request));
     }

@@ -38,10 +38,12 @@ public class SecurityConfig
                 .formLogin(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
                 // Unauthenticated -> 401 (the default entry point answers 403).
                 .exceptionHandling(e -> e.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .addFilterBefore(new GatewayHeadersAuthenticationFilter(), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(auth -> auth
+
                         // Error dispatches carry the status already decided for the original request.
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 
@@ -51,7 +53,7 @@ public class SecurityConfig
                         // Not routed by the gateway: reachable only from inside the Docker network.
                         .requestMatchers(HttpMethod.GET, "/internal/users/*/token-status").permitAll()
 
-                        // Any authenticated user (must come before the {userId} patterns below)
+                        // Any authenticated user
                         .requestMatchers(HttpMethod.GET, "/api/users/me", "/api/users/students/search").authenticated()
 
                         .requestMatchers(HttpMethod.GET, "/api/users/students/{userId}", "/api/users/teachers/{userId}")
@@ -71,6 +73,8 @@ public class SecurityConfig
 
         return http.build();
     }
+
+
     /** Allows the request when the {userId} in the path is the authenticated user, or the user is an admin. */
     private static AuthorizationManager<RequestAuthorizationContext> selfOrAdmin()
     {
@@ -81,8 +85,10 @@ public class SecurityConfig
                 return new AuthorizationDecision(false);
             }
 
-            boolean isAdmin = auth.getAuthorities().stream()
+            boolean isAdmin = auth.getAuthorities()
+                    .stream()
                     .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+
             if (isAdmin)
             {
                 return new AuthorizationDecision(true);
@@ -100,8 +106,7 @@ public class SecurityConfig
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(CustomUserDetailsService userDetailsService,
-                                                       PasswordEncoder passwordEncoder)
+    public AuthenticationManager authenticationManager(CustomUserDetailsService userDetailsService, PasswordEncoder passwordEncoder)
     {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);

@@ -20,7 +20,6 @@ class TextAnalysis(Base):
     translated_text: Mapped[str | None] = mapped_column(Text)
     translation_language: Mapped[str | None] = mapped_column(String(10))
 
-    # The database cascades the delete to the tokens (ON DELETE CASCADE), so the ORM need not load them.
     tokens: Mapped[list["AnalysisToken"]] = relationship(
         back_populates="analysis",
         cascade="all, delete-orphan",

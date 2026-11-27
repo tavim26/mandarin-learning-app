@@ -41,7 +41,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException
     {
-        // Authorization rules are matched against the raw URI, while downstream services decode it.
         if (request.getRequestURI().indexOf('%') >= 0)
         {
             sendError(response, HttpStatus.BAD_REQUEST, "Encoded characters are not allowed in the request path");
@@ -95,7 +94,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter
         }
         catch (UserServiceUnavailableException e)
         {
-            // Fail closed: without user-service we cannot tell whether the token was revoked.
             log.warn("Token status check failed for user {}", userId, e);
             sendError(response, HttpStatus.SERVICE_UNAVAILABLE, "Authentication service unavailable");
             return;

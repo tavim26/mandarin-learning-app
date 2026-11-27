@@ -34,18 +34,20 @@ public class ExerciseController
         this.exerciseService = exerciseService;
     }
 
-    @Operation(summary = "Get an exercise")
+    @Operation(summary = "Get an exercise (answers hidden from students)")
     @GetMapping("/exercises/{id}")
-    public ExerciseDto get(@PathVariable Long id)
+    public ExerciseDto get(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        return exerciseService.get(id);
+        ExerciseDto exercise = exerciseService.get(id);
+        return user.canEditContent() ? exercise : exercise.withoutAnswers();
     }
 
-    @Operation(summary = "Get exercises of a lesson")
+    @Operation(summary = "Get exercises of a lesson (answers hidden from students)")
     @GetMapping("/lessons/{lessonId}/exercises")
-    public List<ExerciseDto> getByLesson(@PathVariable Long lessonId)
+    public List<ExerciseDto> getByLesson(@PathVariable Long lessonId, @Parameter(hidden = true) CurrentUser user)
     {
-        return exerciseService.findByLesson(lessonId);
+        List<ExerciseDto> exercises = exerciseService.findByLesson(lessonId);
+        return user.canEditContent() ? exercises : exercises.stream().map(ExerciseDto::withoutAnswers).toList();
     }
 
     @Operation(summary = "Add an exercise to an owned lesson")

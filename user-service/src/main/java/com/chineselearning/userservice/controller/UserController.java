@@ -2,7 +2,6 @@ package com.chineselearning.userservice.controller;
 
 import com.chineselearning.userservice.dto.*;
 import com.chineselearning.userservice.service.UserService;
-import com.chineselearning.userservice.validation.MaxUtf8Bytes;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +27,7 @@ public class UserController
     {
         this.userService = userService;
     }
+
 
     // ===== Users =====
 
@@ -86,6 +86,8 @@ public class UserController
         return ResponseEntity.noContent().build();
     }
 
+
+
     // ===== Students =====
 
     @GetMapping("/students")
@@ -121,6 +123,8 @@ public class UserController
         return userService.updateStudentNickname(userId, newNickname);
     }
 
+
+
     // ===== Teachers =====
 
     @GetMapping("/teachers")
@@ -146,6 +150,8 @@ public class UserController
     {
         return userService.updateTeacherTitle(userId, newTitle);
     }
+
+
 
     // ===== Credentials =====
 

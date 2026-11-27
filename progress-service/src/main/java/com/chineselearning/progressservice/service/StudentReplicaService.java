@@ -11,7 +11,8 @@ import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
-public class StudentReplicaService {
+public class StudentReplicaService
+{
 
     private final StudentReplicaRepository replicaRepository;
 

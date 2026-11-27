@@ -43,7 +43,6 @@ public class LessonMaterialEntity
         this.url = url;
     }
 
-    /** A link points to an external page; every other type points to a file uploaded to this platform. */
     public boolean isLink()
     {
         return TYPE_LINK.equalsIgnoreCase(type);

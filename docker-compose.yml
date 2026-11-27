@@ -184,7 +184,7 @@ services:
       DATABASE_URL: postgresql+psycopg2://postgres:${POSTGRES_PASSWORD}@analysis-db:5432/text_analysis_database
       GOOGLE_TRANSLATE_API_KEY: ${GOOGLE_TRANSLATE_API_KEY}
     volumes:
-      - ocr-models:/models/easyocr
+      - easyocr-models:/models/easyocr
     depends_on:
       analysis-db:
         condition: service_healthy

@@ -19,7 +19,6 @@ public class TeacherEntity
 
     public TeacherEntity()
     {
-        // The current frontend expects a string, never null.
         this.title = "";
     }
 

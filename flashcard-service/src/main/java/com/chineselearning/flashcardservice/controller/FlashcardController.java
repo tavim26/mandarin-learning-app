@@ -41,13 +41,12 @@ public class FlashcardController {
     private final StudyStatsService statsService;
     private final ReviewService reviewService;
 
-    public FlashcardController(FlashcardSetService setService,
-                               StudyStatsService statsService,
-                               ReviewService reviewService) {
+    public FlashcardController(FlashcardSetService setService, StudyStatsService statsService, ReviewService reviewService) {
         this.setService = setService;
         this.statsService = statsService;
         this.reviewService = reviewService;
     }
+
 
     // ---------- sets ----------
 
@@ -86,6 +85,8 @@ public class FlashcardController {
         return statsService.getSetStats(userId, setId);
     }
 
+
+
     // ---------- cards ----------
 
     @PostMapping("/cards")
@@ -116,6 +117,8 @@ public class FlashcardController {
         setService.deleteCard(userId, flashcardId);
         return ResponseEntity.noContent().build();
     }
+
+
 
     // ---------- reviews (SM-2) ----------
 

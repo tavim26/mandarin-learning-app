@@ -32,7 +32,6 @@ class HskVocabulary:
 
 
 def dominant_level(levels: Iterable[int | None]) -> int | None:
-    """Most frequent HSK level; on a tie the higher level wins. None when no word has a level."""
     counts = Counter(level for level in levels if level is not None)
     if not counts:
         return None

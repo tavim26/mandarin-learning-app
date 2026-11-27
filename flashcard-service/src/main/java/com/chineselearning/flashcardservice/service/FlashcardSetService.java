@@ -19,7 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -46,11 +45,14 @@ public class FlashcardSetService {
         this.access = access;
     }
 
+
     // ---------- sets ----------
 
     @Transactional
-    public FlashcardSetDto createSet(Long userId, CreateFlashcardSetRequest request) {
-        if (setRepository.countByStudentId(userId) >= MAX_SETS_PER_STUDENT) {
+    public FlashcardSetDto createSet(Long userId, CreateFlashcardSetRequest request)
+    {
+        if (setRepository.countByStudentId(userId) >= MAX_SETS_PER_STUDENT)
+        {
             throw new QuotaExceededException("You can have at most " + MAX_SETS_PER_STUDENT + " flashcard sets");
         }
         FlashcardSet saved = setRepository.save(
@@ -59,76 +61,93 @@ public class FlashcardSetService {
     }
 
     @Transactional(readOnly = true)
-    public List<FlashcardSetDto> getSetsByStudent(Long userId, Long studentId) {
+    public List<FlashcardSetDto> getSetsByStudent(Long userId, Long studentId)
+    {
         access.requireSelf(userId, studentId);
         List<FlashcardSet> sets = setRepository.findByStudentIdOrderByIdDesc(studentId);
-        if (sets.isEmpty()) {
+
+        if (sets.isEmpty())
+        {
             return List.of();
         }
+
         Map<Long, Long> counts = flashcardRepository
                 .countBySetIds(sets.stream().map(FlashcardSet::getId).toList()).stream()
                 .collect(Collectors.toMap(SetCardCount::getSetId, SetCardCount::getTotal));
+
         return sets.stream()
                 .map(set -> FlashcardSetDto.from(set, counts.getOrDefault(set.getId(), 0L)))
                 .toList();
     }
 
     @Transactional(readOnly = true)
-    public FlashcardSetDto getSet(Long userId, Long setId) {
+    public FlashcardSetDto getSet(Long userId, Long setId)
+    {
         FlashcardSet set = access.requireOwnedSet(userId, setId);
         return FlashcardSetDto.from(set, flashcardRepository.countBySetId(setId));
     }
 
     @Transactional
-    public FlashcardSetDto updateSet(Long userId, Long setId, UpdateFlashcardSetRequest request) {
+    public FlashcardSetDto updateSet(Long userId, Long setId, UpdateFlashcardSetRequest request)
+    {
         FlashcardSet set = access.requireOwnedSet(userId, setId);
         set.update(request.title(), request.description()); // dirty checking persists it
         return FlashcardSetDto.from(set, flashcardRepository.countBySetId(setId));
     }
 
     @Transactional
-    public void deleteSet(Long userId, Long setId) {
+    public void deleteSet(Long userId, Long setId)
+    {
         access.requireOwnedSet(userId, setId);
-        // Bulk deletes in dependency order: no entity is loaded into memory.
+
         reviewRepository.deleteAllBySetId(setId);
         progressRepository.deleteAllBySetId(setId);
         flashcardRepository.deleteAllBySetId(setId);
         setRepository.deleteById(setId);
     }
 
+
+
     // ---------- cards ----------
 
     @Transactional
-    public FlashcardDto createCard(Long userId, CreateFlashcardRequest request) {
+    public FlashcardDto createCard(Long userId, CreateFlashcardRequest request)
+    {
         FlashcardSet set = access.requireOwnedSet(userId, request.setId());
-        if (flashcardRepository.countBySetId(set.getId()) >= MAX_CARDS_PER_SET) {
+
+        if (flashcardRepository.countBySetId(set.getId()) >= MAX_CARDS_PER_SET)
+        {
             throw new QuotaExceededException("A set can have at most " + MAX_CARDS_PER_SET + " cards");
         }
-        Flashcard saved = flashcardRepository.save(
-                Flashcard.create(set, request.frontText(), request.backText()));
+
+        Flashcard saved = flashcardRepository.save(Flashcard.create(set, request.frontText(), request.backText()));
         return FlashcardDto.from(saved);
     }
 
     @Transactional(readOnly = true)
-    public List<FlashcardDto> getCardsBySet(Long userId, Long setId) {
+    public List<FlashcardDto> getCardsBySet(Long userId, Long setId)
+    {
         access.requireOwnedSet(userId, setId);
         return flashcardRepository.findBySetIdOrderByIdAsc(setId).stream().map(FlashcardDto::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public FlashcardDto getCard(Long userId, Long flashcardId) {
+    public FlashcardDto getCard(Long userId, Long flashcardId)
+    {
         return FlashcardDto.from(access.requireOwnedCard(userId, flashcardId));
     }
 
     @Transactional
-    public FlashcardDto updateCard(Long userId, Long flashcardId, UpdateFlashcardRequest request) {
+    public FlashcardDto updateCard(Long userId, Long flashcardId, UpdateFlashcardRequest request)
+    {
         Flashcard card = access.requireOwnedCard(userId, flashcardId);
         card.update(request.frontText(), request.backText());
         return FlashcardDto.from(card);
     }
 
     @Transactional
-    public void deleteCard(Long userId, Long flashcardId) {
+    public void deleteCard(Long userId, Long flashcardId)
+    {
         access.requireOwnedCard(userId, flashcardId);
         reviewRepository.deleteAllByFlashcardId(flashcardId);
         progressRepository.deleteAllByFlashcardId(flashcardId);

@@ -14,7 +14,6 @@ import java.util.Optional;
 public interface StudentReplicaRepository extends JpaRepository<StudentReplica, Long>
 {
 
-
     @Modifying
     @Query(value = """
             INSERT INTO students_replica (student_id, xp_total, level)

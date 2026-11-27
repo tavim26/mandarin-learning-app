@@ -17,11 +17,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Extends ResponseEntityExceptionHandler so framework exceptions (malformed JSON, wrong types,
- * unknown routes, oversized uploads) keep their proper 4xx status instead of falling into the
- * catch-all handler below.
- */
+
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
 {
@@ -52,7 +48,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
         return ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "File storage error");
     }
 
-    /** A bug must surface as a 500 and be logged, not be disguised as a 400. */
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception e)
     {

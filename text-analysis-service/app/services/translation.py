@@ -44,7 +44,6 @@ class GoogleTranslateClient:
                 timeout=self._timeout,
             )
         except requests.RequestException as exc:
-            # Never log the exception text: it contains the request URL, and the URL contains the API key.
             logger.warning("Translation request failed: %s", type(exc).__name__)
             raise TranslationUnavailableError("The translation service is unavailable") from None
 
@@ -71,7 +70,6 @@ def translate_text_and_words(
     words: Sequence[str],
     target_language: str,
 ) -> tuple[str, dict[str, str]]:
-    """Translates the whole text and each distinct word (a repeated word is paid for once)."""
     distinct_words = list(dict.fromkeys(words))
     translated_text, *translated_words = client.translate([text, *distinct_words], target_language)
     return translated_text, dict(zip(distinct_words, translated_words))

@@ -10,9 +10,11 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "chatbot")
 public record ChatbotProperties(Context context, RateLimit rateLimit) {
 
-    public record Context(@Min(1) int windowSize) {
+    public record Context(@Min(1) int windowSize)
+    {
     }
 
-    public record RateLimit(@Min(1) int maxMessages, Duration window) {
+    public record RateLimit(@Min(1) int maxMessages, Duration window)
+    {
     }
 }

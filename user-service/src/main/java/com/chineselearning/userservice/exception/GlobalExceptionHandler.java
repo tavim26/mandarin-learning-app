@@ -22,11 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
-/**
- * Extends ResponseEntityExceptionHandler so framework exceptions (malformed JSON, missing or
- * mistyped parameters, unknown routes) become ProblemDetail responses here, instead of being
- * forwarded to /error, where the security chain would turn them into 403.
- */
+
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
 {
@@ -47,7 +43,6 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrity(DataIntegrityViolationException e)
     {
-        // Two concurrent requests passed the existence check; the unique constraint caught the second one.
         log.warn("Data integrity violation: {}", e.getMostSpecificCause().getMessage());
         return problem(HttpStatus.CONFLICT, "The value is already in use");
     }
@@ -107,7 +102,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
         return ResponseEntity.badRequest().headers(headers).body(problem(HttpStatus.BAD_REQUEST, message));
     }
 
-    /** Adds the legacy "message" property to the ProblemDetails built by the base class. */
+
     @Override
     protected ResponseEntity<Object> createResponseEntity(Object body, HttpHeaders headers,
                                                           HttpStatusCode statusCode, WebRequest request)
@@ -119,10 +114,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler
         return super.createResponseEntity(body, headers, statusCode, request);
     }
 
+
     private static ProblemDetail problem(HttpStatus status, String message)
     {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, message);
-        // The current frontend reads "message"; remove once it reads "detail".
         problem.setProperty("message", message);
         return problem;
     }

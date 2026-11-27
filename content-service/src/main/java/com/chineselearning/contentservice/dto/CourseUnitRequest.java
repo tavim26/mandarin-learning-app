@@ -16,7 +16,6 @@ public record CourseUnitRequest(
         @Size(max = 5000, message = "Description must not exceed 5000 characters")
         String description,
 
-        // Optional: a unit may have no HSK level
         @Min(value = 1, message = "HSK level must be between 1 and 6")
         @Max(value = 6, message = "HSK level must be between 1 and 6")
         Integer hskLevel,

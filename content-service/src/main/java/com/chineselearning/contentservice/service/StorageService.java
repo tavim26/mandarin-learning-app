@@ -55,7 +55,6 @@ public class StorageService
             throw new InvalidRequestException("The file exceeds the maximum allowed size of 50MB");
         }
 
-        // The client-supplied Content-Type is ignored on purpose: it can be forged.
         AllowedFileType type = AllowedFileType.fromFileName(file.getOriginalFilename())
                 .orElseThrow(() -> new InvalidRequestException("File extension not allowed"));
 
@@ -81,7 +80,6 @@ public class StorageService
         return new StoredFile(new FileSystemResource(resolve(fileName)), type);
     }
 
-    /** Returns the type of an existing file, or empty if it is missing, unsafe or not an allowed type. */
     public Optional<AllowedFileType> storedFileType(String fileName)
     {
         if (fileName == null || !SAFE_FILE_NAME.matcher(fileName).matches())
@@ -103,11 +101,7 @@ public class StorageService
         return SAFE_FILE_NAME.matcher(fileName).matches() ? Optional.of(fileName) : Optional.empty();
     }
 
-    /**
-     * Deletes the uploaded files behind the given materials once the current transaction has
-     * committed, so a rollback never leaves a material pointing to a file that is already gone.
-     * Links are skipped: they may point to a file that belongs to another material.
-     */
+
     public void deleteFilesAfterCommit(Collection<LessonMaterialEntity> materials)
     {
         List<String> fileNames = materials.stream()
@@ -154,7 +148,9 @@ public class StorageService
         {
             throw new IllegalArgumentException("Invalid file name");
         }
+
         Path path = uploadPath.resolve(fileName).normalize();
+
         if (!uploadPath.equals(path.getParent()))
         {
             throw new IllegalArgumentException("Invalid file name");

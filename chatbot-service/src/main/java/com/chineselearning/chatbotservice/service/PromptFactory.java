@@ -5,7 +5,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class PromptFactory {
 
-    // Paste the exact text block from the old AiService.SYSTEM_PROMPT here.
     private static final String BASE_PROMPT = """
             <THE EXISTING SYSTEM_PROMPT TEXT BLOCK HERE>
             """;

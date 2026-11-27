@@ -43,7 +43,6 @@ public class MaterialService
                 .toList();
     }
 
-    /** Not transactional on purpose: it only touches the disk. */
     public String upload(MultipartFile file, CurrentUser user) throws IOException
     {
         accessPolicy.requireEditor(user);

@@ -12,7 +12,6 @@ public interface ExerciseRepository extends JpaRepository<ExerciseEntity, Long>
 {
     List<ExerciseEntity> findByLessonIdOrderByIdAsc(Long lessonId);
 
-    /** Loads the exercise with its lesson and unit, which is what ownership checks need. */
     @Query("select e from ExerciseEntity e join fetch e.lesson l join fetch l.unit where e.id = :id")
     Optional<ExerciseEntity> findWithUnitById(@Param("id") Long id);
 

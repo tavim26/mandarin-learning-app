@@ -4,10 +4,9 @@ import com.chineselearning.contentservice.entity.LessonEntity;
 
 import java.util.List;
 
-public record LessonDto(Long id, Long unitId, String title, String description,
-                        Integer xpReward, Integer orderIndex, List<ExerciseDto> exercises)
+public record LessonDto(Long id, Long unitId, String title, String description, Integer xpReward, Integer orderIndex, List<ExerciseDto> exercises)
 {
-    /** Without exercises: the field stays null, exactly as before. */
+
     public static LessonDto from(LessonEntity lesson)
     {
         return new LessonDto(lesson.getId(), lesson.getUnit().getId(), lesson.getTitle(),

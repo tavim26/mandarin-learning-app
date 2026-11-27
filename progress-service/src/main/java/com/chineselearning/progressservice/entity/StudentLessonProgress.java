@@ -61,17 +61,14 @@ public class StudentLessonProgress {
         this.completionPct = BigDecimal.ZERO;
     }
 
-    /**
-     * Applies a new completion percentage and moves the status accordingly.
-     *
-     * @return true when the lesson has just been completed and no XP has been granted for it yet
-     */
+
     public boolean updateCompletion(BigDecimal newPct, LocalDateTime now)
     {
         if (startedAt == null)
         {
             startedAt = now;
         }
+
         completionPct = newPct;
         lastAccessedAt = now;
 

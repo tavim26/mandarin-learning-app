@@ -51,7 +51,6 @@ public class FlashcardProgress {
     protected FlashcardProgress() {
     }
 
-    /** Rows are created by FlashcardProgressRepository.insertIfAbsent (race-free), never by constructor. */
     public void apply(Sm2Scheduler.Result result, LocalDateTime reviewedAt) {
         this.easinessFactor = result.easinessFactor();
         this.intervalDays = result.intervalDays();

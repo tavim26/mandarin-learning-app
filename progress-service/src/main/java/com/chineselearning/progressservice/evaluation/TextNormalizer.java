@@ -5,12 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Normalizes free text before comparison: NFKC (full-width forms), case folding, punctuation removal.
- */
+
 final class TextNormalizer {
 
-    private TextNormalizer() {
+    private TextNormalizer()
+    {
     }
 
     static List<String> tokens(String raw)

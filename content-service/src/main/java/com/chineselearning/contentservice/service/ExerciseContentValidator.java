@@ -40,7 +40,6 @@ public final class ExerciseContentValidator
     {
         List<String> options = texts(data, "options", 2);
 
-        // Must be an Integer: the evaluator casts it to Integer, so 1.0 would never match.
         if (!(data.get("correctIndex") instanceof Integer index) || index < 0 || index >= options.size())
         {
             throw invalid("'correctIndex' must be a whole number pointing to one of the options");
@@ -70,7 +69,6 @@ public final class ExerciseContentValidator
         List<String> words = texts(data, "words", 2);
         List<String> correctOrder = texts(data, "correctOrder", 2);
 
-        // The student can only rearrange the given words, so both lists must hold the same words.
         List<String> sortedWords = new ArrayList<>(words);
         List<String> sortedOrder = new ArrayList<>(correctOrder);
         Collections.sort(sortedWords);

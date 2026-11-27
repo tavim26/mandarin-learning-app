@@ -42,9 +42,9 @@ public class LessonController
 
     @Operation(summary = "Get a lesson with its exercises")
     @GetMapping("/lessons/{id}")
-    public LessonDto get(@PathVariable Long id)
+    public LessonDto get(@PathVariable Long id, @Parameter(hidden = true) CurrentUser user)
     {
-        return lessonService.get(id);
+        return lessonService.get(id, user.canEditContent());
     }
 
     @Operation(summary = "Create a lesson in an owned unit")

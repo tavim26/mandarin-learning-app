@@ -45,10 +45,10 @@ public class ReviewService {
     }
 
     @Transactional
-    public ReviewResultDto submitReview(Long userId, SubmitReviewRequest request) {
+    public ReviewResultDto submitReview(Long userId, SubmitReviewRequest request)
+    {
         Flashcard card = access.requireOwnedCard(userId, request.flashcardId());
 
-        // Race-free: create the row if it is missing, then lock it so concurrent reviews run one by one.
         progressRepository.insertIfAbsent(userId, card.getId());
         FlashcardProgress progress = progressRepository.findForUpdate(userId, card.getId())
                 .orElseThrow(() -> new IllegalStateException("Progress row missing after insert"));
@@ -60,19 +60,21 @@ public class ReviewService {
                 progress.getRepetitionCount(),
                 request.quality(),
                 now.toLocalDate());
-        progress.apply(result, now); // dirty checking persists it
+        progress.apply(result, now);
 
         FlashcardReview review = reviewRepository.save(FlashcardReview.of(userId, card, request.quality(), now));
         return new ReviewResultDto(FlashcardReviewDto.from(review), FlashcardProgressDto.from(progress));
     }
 
     @Transactional(readOnly = true)
-    public List<FlashcardProgressDto> getDueFlashcards(Long userId, Long studentId, Long setId) {
+    public List<FlashcardProgressDto> getDueFlashcards(Long userId, Long studentId, Long setId)
+    {
         access.requireSelf(userId, studentId);
         access.requireOwnedSet(userId, setId);
 
         List<Long> cardIds = flashcardRepository.findIdsBySetId(setId);
-        if (cardIds.isEmpty()) {
+        if (cardIds.isEmpty())
+        {
             return List.of();
         }
         List<FlashcardProgress> existing = progressRepository.findByStudentIdAndFlashcardIdIn(studentId, cardIds);
@@ -93,14 +95,16 @@ public class ReviewService {
     }
 
     @Transactional(readOnly = true)
-    public List<FlashcardReviewDto> getReviewHistory(Long userId, Long studentId, Long flashcardId) {
+    public List<FlashcardReviewDto> getReviewHistory(Long userId, Long studentId, Long flashcardId)
+    {
         access.requireSelf(userId, studentId);
         return reviewRepository.findByStudentIdAndFlashcardIdOrderByReviewedAtAscIdAsc(studentId, flashcardId)
                 .stream().map(FlashcardReviewDto::from).toList();
     }
 
     @Transactional(readOnly = true)
-    public FlashcardProgressDto getProgress(Long userId, Long studentId, Long flashcardId) {
+    public FlashcardProgressDto getProgress(Long userId, Long studentId, Long flashcardId)
+    {
         access.requireSelf(userId, studentId);
         return progressRepository.findByStudentIdAndFlashcardId(studentId, flashcardId)
                 .map(FlashcardProgressDto::from)

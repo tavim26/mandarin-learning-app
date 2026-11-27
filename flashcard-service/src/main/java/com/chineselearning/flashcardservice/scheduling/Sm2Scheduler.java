@@ -26,35 +26,48 @@ public final class Sm2Scheduler {
     }
 
     public static Result schedule(BigDecimal easinessFactor, int intervalDays, int repetitionCount, int quality, LocalDate today) {
-        if (quality < 0 || quality > 5) {
+
+        if (quality < 0 || quality > 5)
+        {
             throw new IllegalArgumentException("quality must be between 0 and 5");
         }
+
         BigDecimal newEf = nextEasinessFactor(easinessFactor, quality);
 
         int newRepetitions;
         int newInterval;
-        if (quality < PASSING_QUALITY) {
+
+        if (quality < PASSING_QUALITY)
+        {
             newRepetitions = 0;
             newInterval = FIRST_INTERVAL_DAYS;
-        } else {
+        }
+
+        else
+        {
             newRepetitions = repetitionCount + 1;
             newInterval = nextInterval(intervalDays, newRepetitions, newEf);
         }
         return new Result(newEf, newInterval, newRepetitions, today.plusDays(newInterval).atStartOfDay());
     }
 
-    private static BigDecimal nextEasinessFactor(BigDecimal ef, int quality) {
+    private static BigDecimal nextEasinessFactor(BigDecimal ef, int quality)
+    {
         BigDecimal miss = FIVE.subtract(BigDecimal.valueOf(quality));
         BigDecimal delta = BASE.subtract(miss.multiply(LINEAR.add(miss.multiply(QUADRATIC))));
         BigDecimal result = ef.add(delta).setScale(2, RoundingMode.HALF_UP);
         return result.compareTo(MIN_EASINESS_FACTOR) < 0 ? MIN_EASINESS_FACTOR : result;
     }
 
-    private static int nextInterval(int currentInterval, int repetitions, BigDecimal ef) {
-        if (repetitions == 1) {
+    private static int nextInterval(int currentInterval, int repetitions, BigDecimal ef)
+    {
+        if (repetitions == 1)
+        {
             return FIRST_INTERVAL_DAYS;
         }
-        if (repetitions == 2) {
+
+        if (repetitions == 2)
+        {
             return SECOND_INTERVAL_DAYS;
         }
         return BigDecimal.valueOf(currentInterval).multiply(ef).setScale(0, RoundingMode.HALF_UP).intValueExact();

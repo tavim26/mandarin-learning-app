@@ -23,8 +23,7 @@ public class AuthService
     private final UserService userService;
     private final JwtService jwtService;
 
-    public AuthService(AuthenticationManager authenticationManager, CredentialRepository credentialRepository,
-                       UserService userService, JwtService jwtService)
+    public AuthService(AuthenticationManager authenticationManager, CredentialRepository credentialRepository, UserService userService, JwtService jwtService)
     {
         this.authenticationManager = authenticationManager;
         this.credentialRepository = credentialRepository;

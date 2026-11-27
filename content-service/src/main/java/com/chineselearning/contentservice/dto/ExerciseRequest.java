@@ -12,7 +12,7 @@ import java.util.Map;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExerciseRequest(
-        // Required when creating an exercise, ignored when updating one (the lesson never changes).
+
         Long lessonId,
 
         @NotBlank(message = "Exercise type is mandatory")

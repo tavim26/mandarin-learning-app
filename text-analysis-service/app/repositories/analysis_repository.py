@@ -26,6 +26,7 @@ class AnalysisRepository:
         )
         return self._session.scalars(statement).one_or_none()
 
+
     def delete(self, analysis: TextAnalysis) -> None:
         self._session.delete(analysis)
         self._session.flush()
@@ -56,6 +57,7 @@ class AnalysisRepository:
         statement = select(TextAnalysis).where(*conditions).order_by(*ordering).offset(offset).limit(limit)
         return list(self._session.scalars(statement)), total
 
+
     def count_tokens_by_hsk_level(self, student_id: int) -> list[tuple[int | None, int]]:
         statement = (
             select(AnalysisToken.hsk_level, func.count(AnalysisToken.id))
@@ -65,6 +67,7 @@ class AnalysisRepository:
         )
         return [(level, count) for level, count in self._session.execute(statement)]
 
+
     def count_distinct_words_by_hsk_level(self, student_id: int) -> list[tuple[int, int]]:
         statement = (
             select(AnalysisToken.hsk_level, func.count(AnalysisToken.hanzi.distinct()))
@@ -73,6 +76,7 @@ class AnalysisRepository:
             .group_by(AnalysisToken.hsk_level)
         )
         return [(level, count) for level, count in self._session.execute(statement)]
+
 
     def count_by_source_type(self, student_id: int) -> dict[str, int]:
         statement = (

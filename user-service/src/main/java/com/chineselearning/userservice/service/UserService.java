@@ -24,9 +24,7 @@ public class UserService
     private final TeacherRepository teacherRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserService(CredentialRepository credentialRepository, UserRepository userRepository,
-                       StudentRepository studentRepository, TeacherRepository teacherRepository,
-                       PasswordEncoder passwordEncoder)
+    public UserService(CredentialRepository credentialRepository, UserRepository userRepository, StudentRepository studentRepository, TeacherRepository teacherRepository, PasswordEncoder passwordEncoder)
     {
         this.credentialRepository = credentialRepository;
         this.userRepository = userRepository;
@@ -57,9 +55,9 @@ public class UserService
             case ADMIN -> { }
         }
 
-        // Flush so that the generated ids are available and unique violations surface here.
         return credentialRepository.saveAndFlush(credential);
     }
+
 
     @Transactional
     public UserDto createUser(CreateUserRequestDto request)
@@ -68,6 +66,7 @@ public class UserService
         CredentialEntity credential = createAccount(request.getEmail(), request.getPassword(), request.getFullName(), role);
         return UserDto.from(credential.getUser());
     }
+
 
     // ===== Users =====
 
@@ -106,6 +105,7 @@ public class UserService
         requireNotAdmin(credential, "Admin accounts cannot be deleted");
         credentialRepository.delete(credential);
     }
+
 
     // ===== Students and teachers =====
 
@@ -167,6 +167,7 @@ public class UserService
         teacher.setTitle(newTitle.trim());
         return TeacherDto.from(teacher);
     }
+
 
     // ===== Credentials =====
 
@@ -243,6 +244,7 @@ public class UserService
         CredentialEntity credential = findCredential(userId);
         return new TokenStatusDto(credential.isActive(), credential.getTokenVersion());
     }
+
 
     // ===== Helpers =====
 

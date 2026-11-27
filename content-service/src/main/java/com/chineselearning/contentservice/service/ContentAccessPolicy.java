@@ -25,8 +25,7 @@ public class ContentAccessPolicy
     private final ExerciseRepository exerciseRepository;
     private final LessonMaterialRepository materialRepository;
 
-    public ContentAccessPolicy(CourseUnitRepository unitRepository, LessonRepository lessonRepository,
-                               ExerciseRepository exerciseRepository, LessonMaterialRepository materialRepository)
+    public ContentAccessPolicy(CourseUnitRepository unitRepository, LessonRepository lessonRepository, ExerciseRepository exerciseRepository, LessonMaterialRepository materialRepository)
     {
         this.unitRepository = unitRepository;
         this.lessonRepository = lessonRepository;
@@ -47,6 +46,7 @@ public class ContentAccessPolicy
         requireEditor(user);
         CourseUnitEntity unit = unitRepository.findById(unitId)
                 .orElseThrow(() -> new ResourceNotFoundException("CourseUnit not found: " + unitId));
+
         requireOwnership(user, unit);
         return unit;
     }

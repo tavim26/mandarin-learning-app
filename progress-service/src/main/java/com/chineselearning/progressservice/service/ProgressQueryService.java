@@ -86,13 +86,12 @@ public class ProgressQueryService {
                 progressRepository.countByStudentIdAndStatus(studentId, LessonStatus.IN_PROGRESS));
     }
 
-    /**
-     * Not @Transactional: it first calls content-service, and a connection must not be held during that call.
-     * The repository call below runs in its own short read-only transaction.
-     */
-    public StudentUnitProgressDto getUnitProgress(Long studentId, Long unitId) {
+
+    public StudentUnitProgressDto getUnitProgress(Long studentId, Long unitId)
+    {
         List<LessonView> lessons = contentClient.getLessonsForUnit(unitId);
-        if (lessons.isEmpty()) {
+        if (lessons.isEmpty())
+        {
             return new StudentUnitProgressDto(unitId, studentId, 0, 0, 0, 0, BigDecimal.ZERO);
         }
         List<Long> lessonIds = lessons.stream().map(LessonView::id).toList();

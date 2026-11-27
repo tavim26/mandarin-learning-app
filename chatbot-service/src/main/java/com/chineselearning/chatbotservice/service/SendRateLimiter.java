@@ -18,7 +18,8 @@ public class SendRateLimiter {
     private final int maxMessages;
     private final long windowNanos;
 
-    public SendRateLimiter(ChatbotProperties properties) {
+    public SendRateLimiter(ChatbotProperties properties)
+    {
         this.maxMessages = properties.rateLimit().maxMessages();
         this.windowNanos = properties.rateLimit().window().toNanos();
     }
@@ -38,12 +39,14 @@ public class SendRateLimiter {
             {
                 hits.pollFirst();
             }
+
             if (hits.size() >= maxMessages)
             {
                 long waitNanos = windowNanos - (nowNanos - hits.peekFirst());
                 long retryAfter = Math.max(1, Duration.ofNanos(waitNanos).toSeconds() + 1);
                 throw new RateLimitExceededException(retryAfter);
             }
+
             hits.addLast(nowNanos);
         }
     }

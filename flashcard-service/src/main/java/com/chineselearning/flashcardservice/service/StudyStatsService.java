@@ -47,10 +47,14 @@ public class StudyStatsService {
         this.clock = clock;
     }
 
-    public FlashcardSetStatsDto getSetStats(Long userId, Long setId) {
+    public FlashcardSetStatsDto getSetStats(Long userId, Long setId)
+    {
         access.requireOwnedSet(userId, setId);
+
         List<Long> cardIds = flashcardRepository.findIdsBySetId(setId);
-        if (cardIds.isEmpty()) {
+
+        if (cardIds.isEmpty())
+        {
             return new FlashcardSetStatsDto(setId, 0, 0, 0, 0, 0, Sm2Scheduler.INITIAL_EASINESS_FACTOR);
         }
 
@@ -75,11 +79,15 @@ public class StudyStatsService {
         return new FlashcardSetStatsDto(setId, total, newCards, learning, mature, dueExisting + newCards, averageEf);
     }
 
-    public TotalDueStatsDto getTotalDueStats(Long userId) {
+    public TotalDueStatsDto getTotalDueStats(Long userId)
+    {
         List<FlashcardSet> sets = setRepository.findByStudentIdOrderByIdDesc(userId);
-        if (sets.isEmpty()) {
+
+        if (sets.isEmpty())
+        {
             return new TotalDueStatsDto(0, List.of());
         }
+
         List<Long> setIds = sets.stream().map(FlashcardSet::getId).toList();
         LocalDateTime now = LocalDateTime.now(clock);
 

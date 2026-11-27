@@ -17,12 +17,10 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, Long> 
 
     Page<ChatMessage> findBySessionIdOrderByCreatedAtAscIdAsc(Long sessionId, Pageable pageable);
 
-    /** Latest messages first; the service reverses them to chronological order. */
     List<ChatMessage> findBySessionIdOrderByIdDesc(Long sessionId, Pageable pageable);
 
     long countBySessionId(Long sessionId);
 
-    /** One query for any number of sessions: removes the N+1 of the old implementation. */
     @Query("""
             select m.session.id as sessionId,
                    count(m) as messageCount,

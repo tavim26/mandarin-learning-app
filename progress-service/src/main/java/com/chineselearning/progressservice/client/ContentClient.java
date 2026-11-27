@@ -35,49 +35,65 @@ public class ContentClient {
                 .build();
     }
 
-    public ExerciseView getExercise(Long exerciseId) {
+    public ExerciseView getExercise(Long exerciseId)
+    {
         ExerciseView exercise = fetch("exercise " + exerciseId, () -> restClient.get()
                 .uri("/api/content/exercises/{id}", exerciseId)
                 .retrieve()
                 .body(ExerciseView.class));
-        if (exercise == null) {
+
+        if (exercise == null)
+        {
             throw new ResourceNotFoundException("Exercise " + exerciseId + " not found");
         }
         return exercise;
     }
 
-    public LessonView getLesson(Long lessonId) {
+    public LessonView getLesson(Long lessonId)
+    {
         LessonView lesson = fetch("lesson " + lessonId, () -> restClient.get()
                 .uri("/api/content/lessons/{id}", lessonId)
                 .retrieve()
                 .body(LessonView.class));
-        if (lesson == null) {
+
+        if (lesson == null)
+        {
             throw new ResourceNotFoundException("Lesson " + lessonId + " not found");
         }
         return lesson;
     }
 
-    public List<LessonView> getLessonsForUnit(Long unitId) {
+    public List<LessonView> getLessonsForUnit(Long unitId)
+    {
         List<LessonView> lessons = fetch("unit " + unitId, () -> restClient.get()
                 .uri("/api/content/units/{id}/lessons", unitId)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<LessonView>>() {
                 }));
+
         return lessons == null ? List.of() : lessons;
     }
 
-    /** One retry for transient failures only; 404 maps to ResourceNotFoundException. */
-    private <T> T fetch(String what, Supplier<T> call) {
+
+    //helper
+
+    private <T> T fetch(String what, Supplier<T> call)
+    {
         RuntimeException last = null;
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
+        {
             try {
                 return call.get();
             } catch (HttpClientErrorException e) {
-                if (e.getStatusCode() == HttpStatus.NOT_FOUND) {
+
+                if (e.getStatusCode() == HttpStatus.NOT_FOUND)
+                {
                     throw new ResourceNotFoundException(what + " not found");
                 }
                 throw new ContentServiceUnavailableException("content-service rejected request for " + what
                         + " with status " + e.getStatusCode().value(), e);
+
             } catch (HttpServerErrorException | ResourceAccessException e) {
                 log.warn("content-service call failed for {} (attempt {}/{}): {}",
                         what, attempt, MAX_ATTEMPTS, e.getMessage());

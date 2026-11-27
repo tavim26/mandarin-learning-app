@@ -16,7 +16,6 @@ public interface LessonMaterialRepository extends JpaRepository<LessonMaterialEn
 
     boolean existsByUrl(String url);
 
-    /** Loads the material with its lesson and unit, which is what ownership checks need. */
     @Query("select m from LessonMaterialEntity m join fetch m.lesson l join fetch l.unit where m.id = :id")
     Optional<LessonMaterialEntity> findWithUnitById(@Param("id") Long id);
 }

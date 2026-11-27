@@ -73,12 +73,16 @@ public class GeminiClient {
                         .body(request)
                         .retrieve()
                         .body(GenerateResponse.class);
+
             } catch (HttpStatusCodeException e) {
+
                 int status = e.getStatusCode().value();
                 boolean retryable = e instanceof HttpServerErrorException || status == 429;
                 log.warn("Gemini call failed (attempt {}/{}): status {}", attempt, properties.maxAttempts(), status);
                 last = e;
-                if (!retryable) {
+
+                if (!retryable)
+                {
                     break;
                 }
             } catch (ResourceAccessException e) {
@@ -92,16 +96,19 @@ public class GeminiClient {
         throw new AiUnavailableException("Gemini request failed", last);
     }
 
+
     private String extractText(GenerateResponse response)
     {
         if (response == null)
         {
             throw new AiUnavailableException("Gemini returned an empty body", null);
         }
+
         if (response.promptFeedback() != null && response.promptFeedback().blockReason() != null)
         {
             throw new AiRefusedException("Prompt blocked: " + response.promptFeedback().blockReason());
         }
+
         if (response.candidates() == null || response.candidates().isEmpty())
         {
             throw new AiRefusedException("No candidates returned");

@@ -15,8 +15,6 @@ final class PublicEndpoints
             "/api/auth/login"
     );
 
-    // Uploaded lesson materials are loaded by the browser through <img>, <audio> and <video> tags,
-    // which cannot send an Authorization header. File names are random UUIDs.
     private static final String PUBLIC_FILES_PREFIX = "/api/content/files/";
 
     private PublicEndpoints() {}

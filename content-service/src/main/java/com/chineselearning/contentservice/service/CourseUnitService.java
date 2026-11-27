@@ -90,7 +90,6 @@ public class CourseUnitService
         CourseUnitEntity unit = accessPolicy.requireUnitOwner(user, id);
         unit.update(request.title(), request.description(), request.hskLevel(), request.orderIndex());
 
-        // No save(): the entity is managed, so the transaction flushes the change.
         return CourseUnitDto.from(unit);
     }
 
@@ -99,7 +98,6 @@ public class CourseUnitService
     {
         CourseUnitEntity unit = accessPolicy.requireUnitOwner(user, id);
 
-        // Read the materials first: after the delete they are gone, and their files must go too.
         List<LessonMaterialEntity> materials = materialRepository.findByLesson_Unit_Id(id);
 
         unitRepository.delete(unit);

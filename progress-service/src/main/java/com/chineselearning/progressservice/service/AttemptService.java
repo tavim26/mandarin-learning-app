@@ -51,32 +51,30 @@ public class AttemptService {
         this.writeTx = new TransactionTemplate(transactionManager);
     }
 
-    /**
-     * Deliberately NOT @Transactional: the content-service calls must not hold a DB connection.
-     */
-    public ExerciseAttemptDto submitAttempt(Long studentId, SubmitAttemptRequest request) {
-        // 1) remote reads, no transaction
+
+    public ExerciseAttemptDto submitAttempt(Long studentId, SubmitAttemptRequest request)
+    {
         ExerciseView exercise = contentClient.getExercise(request.exerciseId());
         LessonView lesson = contentClient.getLesson(exercise.lessonId());
 
-        // 2) pure evaluation (400 for malformed answers, 500 for malformed exercises: nothing is saved)
         EvaluationResult result = evaluationService.evaluate(
                 exercise.type(), exercise.contentData(), request.submittedAnswer());
 
-        // 3) one short transaction, serialized per student
         return writeTx.execute(status -> persist(studentId, request, lesson, result));
     }
 
-    private ExerciseAttemptDto persist(Long studentId, SubmitAttemptRequest request,
-                                       LessonView lesson, EvaluationResult result) {
+
+    private ExerciseAttemptDto persist(Long studentId, SubmitAttemptRequest request, LessonView lesson, EvaluationResult result) {
         replicaRepository.insertIfAbsent(studentId);
         StudentReplica replica = replicaRepository.findByIdForUpdate(studentId)
                 .orElseThrow(() -> new ResourceNotFoundException("Student replica " + studentId + " not found"));
 
         int attemptNumber = attemptRepository.countByStudentIdAndExerciseId(studentId, request.exerciseId()) + 1;
+
         ExerciseAttempt saved = attemptRepository.save(ExerciseAttempt.record(
                 studentId, request.exerciseId(), attemptNumber, request.submittedAnswer(),
                 result.isCorrect(), result.score(), result.feedback()));
+
         log.info("Saved attempt studentId={}, exerciseId={}, attemptNumber={}, correct={}",
                 studentId, request.exerciseId(), attemptNumber, result.isCorrect());
 
@@ -84,11 +82,14 @@ public class AttemptService {
         return ExerciseAttemptDto.from(saved);
     }
 
-    private void updateLessonProgress(Long studentId, LessonView lesson, StudentReplica replica) {
-        if (lesson.exercises() == null || lesson.exercises().isEmpty()) {
+    private void updateLessonProgress(Long studentId, LessonView lesson, StudentReplica replica)
+    {
+        if (lesson.exercises() == null || lesson.exercises().isEmpty())
+        {
             log.warn("Lesson {} has no exercises, progress is not updated", lesson.id());
             return;
         }
+
         List<Long> exerciseIds = lesson.exercises().stream().map(ExerciseView::id).toList();
         long correctCount = attemptRepository.countDistinctCorrectExercises(studentId, exerciseIds);
         BigDecimal completionPct = BigDecimal.valueOf((correctCount * 100.0) / exerciseIds.size())
@@ -98,14 +99,18 @@ public class AttemptService {
                 .findByStudentIdAndLessonId(studentId, lesson.id())
                 .orElseGet(() -> new StudentLessonProgress(studentId, lesson.id()));
 
+
         boolean grantXp = progress.updateCompletion(completionPct, LocalDateTime.now());
-        if (grantXp) {
+
+        if (grantXp)
+        {
             int xp = lesson.xpReward() == null ? 0 : lesson.xpReward();
             progress.grantXp(xp);
-            replica.addXp(xp); // replica is locked: no lost update, no double award
+            replica.addXp(xp);
             log.info("XP granted: studentId={}, lessonId={}, xp={}, totalXp={}", studentId, lesson.id(), xp,
                     replica.getXpTotal());
         }
+
         progressRepository.save(progress);
     }
 }

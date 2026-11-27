@@ -39,7 +39,6 @@ public class LessonEntity
     @Column(name = "order_index", nullable = false)
     private Integer orderIndex;
 
-    // Only here so that deleting a lesson also deletes its exercises and materials.
     @OneToMany(mappedBy = "lesson", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExerciseEntity> exercises = new ArrayList<>();
 

@@ -101,8 +101,7 @@ class AnalysisService:
     def _find_owned(self, user: CurrentUser, analysis_id: int) -> TextAnalysis:
         self._policy.assert_can_use_module(user)
         analysis = self._repository.find_by_id(analysis_id)
-        # A student asking for somebody else's analysis gets the same answer as for a missing one,
-        # so ids cannot be probed.
+
         if analysis is None or (user.role is Role.STUDENT and analysis.student_id != user.id):
             raise NotFoundError("Analysis not found")
         return analysis

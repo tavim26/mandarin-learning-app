@@ -35,7 +35,6 @@ public class CourseUnitEntity
     @Column(name = "created_by_teacher_id")
     private Long createdByTeacherId;
 
-    // Only here so that deleting a unit also deletes its lessons, exercises and materials.
     @OneToMany(mappedBy = "unit", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<LessonEntity> lessons = new ArrayList<>();
 

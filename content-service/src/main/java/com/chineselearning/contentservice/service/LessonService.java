@@ -45,13 +45,14 @@ public class LessonService
     }
 
     @Transactional(readOnly = true)
-    public LessonDto get(Long id)
+    public LessonDto get(Long id, boolean includeAnswers)
     {
         LessonEntity lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found: " + id));
 
         List<ExerciseDto> exercises = exerciseRepository.findByLessonIdOrderByIdAsc(id).stream()
                 .map(ExerciseDto::from)
+                .map(dto -> includeAnswers ? dto : dto.withoutAnswers())
                 .toList();
 
         return LessonDto.from(lesson).withExercises(exercises);
@@ -73,7 +74,6 @@ public class LessonService
     {
         LessonEntity lesson = accessPolicy.requireLessonOwner(user, id);
 
-        // Moving a lesson requires ownership of the target unit as well.
         if (!request.unitId().equals(lesson.getUnit().getId()))
         {
             lesson.moveTo(accessPolicy.requireUnitOwner(user, request.unitId()));

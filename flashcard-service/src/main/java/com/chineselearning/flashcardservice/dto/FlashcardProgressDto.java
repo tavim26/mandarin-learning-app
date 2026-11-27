@@ -22,7 +22,6 @@ public record FlashcardProgressDto(
                 p.getNextReviewAt(), p.getLastReviewedAt());
     }
 
-    /** A card that has never been reviewed has no database row yet. */
     public static FlashcardProgressDto unseen(Long studentId, Long flashcardId) {
         return new FlashcardProgressDto(null, studentId, flashcardId,
                 Sm2Scheduler.INITIAL_EASINESS_FACTOR, 0, 0, null, null);

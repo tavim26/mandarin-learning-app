@@ -7,25 +7,26 @@ from app.services.hsk import HskVocabulary
 # Universal Dependencies POS tags -> labels shown to students.
 # https://universaldependencies.org/u/pos/
 POS_LABELS: dict[str, str] = {
-    "NOUN": "substantiv",
+    "NOUN": "noun",
     "VERB": "verb",
-    "ADJ": "adjectiv",
+    "ADJ": "adjective",
     "ADV": "adverb",
-    "PRON": "pronume",
-    "PROPN": "nume propriu",
-    "NUM": "numar",
-    "PART": "particula",
-    "ADP": "prepozitie",
-    "CONJ": "conjunctie",
-    "CCONJ": "conjunctie",
-    "SCONJ": "conjunctie",
-    "DET": "determinant",
-    "AUX": "auxiliar",
-    "INTJ": "interjectie",
-    "PUNCT": "punctuatie",
-    "SYM": "simbol",
-    "X": "necunoscut",
+    "PRON": "pronoun",
+    "PROPN": "proper noun",
+    "NUM": "number",
+    "PART": "particle",
+    "ADP": "preposition",
+    "CONJ": "conjunction",
+    "CCONJ": "conjunction",
+    "SCONJ": "conjunction",
+    "DET": "determiner",
+    "AUX": "auxiliary",
+    "INTJ": "interjection",
+    "PUNCT": "punctuation",
+    "SYM": "symbol",
+    "X": "unknown",
 }
+
 
 # Length of the `analysis_tokens.hanzi` column.
 MAX_TOKEN_LENGTH = 100
@@ -61,10 +62,11 @@ class SpacySegmenter:
         return [(token.text, token.pos_) for token in self._nlp(text)]
 
 
-    def to_pinyin(word: str) -> str:
-        from pypinyin import Style, pinyin
 
-        return " ".join(syllable[0] for syllable in pinyin(word, style=Style.TONE))
+def to_pinyin(word: str) -> str:
+    from pypinyin import Style, pinyin
+
+    return " ".join(syllable[0] for syllable in pinyin(word, style=Style.TONE))
 
 
 

@@ -28,30 +28,5 @@ public class JwtUtil {
                 .parseSignedClaims(token)
                 .getPayload();
     }
-
-    public boolean isTokenValid(String token)
-    {
-        try {
-            extractAllClaims(token);
-            return true;
-        } catch (JwtException | IllegalArgumentException e) {
-            System.err.println("JWT validation failed: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public Long extractUserId(String token)
-    {
-        return extractAllClaims(token).get("userId", Long.class);
-    }
-
-    public String extractRole(String token)
-    {
-        return extractAllClaims(token).get("role", String.class);
-    }
-
-    public String extractEmail(String token)
-    {
-        return extractAllClaims(token).getSubject();
-    }
+    
 }

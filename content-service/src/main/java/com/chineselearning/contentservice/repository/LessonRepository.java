@@ -17,7 +17,6 @@ public interface LessonRepository extends JpaRepository<LessonEntity, Long>
     @Query("select coalesce(sum(l.xpReward), 0) from LessonEntity l where l.unit.id = :unitId")
     long sumXpRewardByUnitId(@Param("unitId") Long unitId);
 
-    /** Loads the lesson together with its unit, which is what ownership checks need. */
     @Query("select l from LessonEntity l join fetch l.unit where l.id = :id")
     Optional<LessonEntity> findWithUnitById(@Param("id") Long id);
 }

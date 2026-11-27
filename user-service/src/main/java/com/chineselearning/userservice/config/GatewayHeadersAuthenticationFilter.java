@@ -16,8 +16,7 @@ import java.util.Set;
 
 /**
  * Builds the authenticated user from the identity headers set by the API gateway
- * after it has validated the JWT. Deliberately not a @Component: Spring Boot would
- * otherwise also register it as a plain servlet filter outside the security chain.
+ * after it has validated the JWT.
  */
 public class GatewayHeadersAuthenticationFilter extends OncePerRequestFilter
 {
@@ -39,6 +38,7 @@ public class GatewayHeadersAuthenticationFilter extends OncePerRequestFilter
                 SecurityContext context = SecurityContextHolder.createEmptyContext();
                 context.setAuthentication(authentication);
                 SecurityContextHolder.setContext(context);
+
             } catch (NumberFormatException ignored) {
                 // the authorization rules will reject the request
             }
